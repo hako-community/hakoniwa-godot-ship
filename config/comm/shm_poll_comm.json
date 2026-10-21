@@ -16,6 +16,10 @@
           {
             "name": "joint_states",
             "notify_on_recv": false
+          },
+          {
+            "name": "maritime_disturbance",
+            "notify_on_recv": false
           }
         ]
       },

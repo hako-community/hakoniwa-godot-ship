@@ -3,7 +3,7 @@
 
 生成物（config/ 配下、コミット対象）:
   comm/pdu_def.json, comm/pdutypes/<robot>.json  ... compact PDU 定義（pdu_config_ship.json の写し）
-  comm/shm_poll_comm.json                        ... ビューアが購読する PDU（pos / joint_states）
+  comm/shm_poll_comm.json                        ... ビューアが購読する PDU（pos / joint_states / 海上外乱）
   cache/buffer.json, endpoint_shm_with_pdu.json  ... HakoniwaSimNode 内部 SHM endpoint 設定
   robot_sync/<robot>.profile.json                ... hakoniwa_robot_sync 用プロファイル（joint_states を持つ船のみ）
   codec_manifest.json                            ... HakoniwaCodecNode 用（ビルド済み codec のみ列挙）
@@ -62,6 +62,8 @@ def build_outputs(fleet: dict) -> dict:
         pdu_def["robots"].append({"name": name, "pdutypes_id": name})
 
         subscribed = [ship["pos_pdu"]] + ([ship["joint_states_pdu"]] if "joint_states_pdu" in ship else [])
+        if fleet.get("disturbance", {}).get("robot") == name:
+            subscribed.append(fleet["disturbance"]["pdu"])
         known = {e["name"] for e in entries}
         for pdu in subscribed:
             if pdu not in known:

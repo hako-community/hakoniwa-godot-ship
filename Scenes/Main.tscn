@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://Scripts/ship_viewer_session.gd" id="3_session"]
 [ext_resource type="Script" path="res://addons/hakoniwa/scripts/hakoniwa_codec_node.gd" id="4_codec"]
 [ext_resource type="Script" path="res://addons/hakoniwa/scripts/hakoniwa_simulation_node.gd" id="5_sim"]
+[ext_resource type="Script" path="res://Scripts/ocean.gd" id="6_ocean"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.32, 0.5, 0.75, 1)
@@ -23,15 +24,6 @@ fog_enabled = true
 fog_light_color = Color(0.7, 0.78, 0.85, 1)
 fog_density = 0.0002
 
-[sub_resource type="StandardMaterial3D" id="sea_mat"]
-albedo_color = Color(0.05, 0.22, 0.35, 1)
-metallic = 0.1
-roughness = 0.15
-
-[sub_resource type="PlaneMesh" id="sea_mesh"]
-material = SubResource("sea_mat")
-size = Vector2(4000, 4000)
-
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
@@ -42,8 +34,9 @@ environment = SubResource("env")
 transform = Transform3D(1, 0, 0, 0, 0.642788, 0.766044, 0, -0.766044, 0.642788, 0, 100, 0)
 shadow_enabled = true
 
-[node name="Sea" type="MeshInstance3D" parent="."]
-mesh = SubResource("sea_mesh")
+[node name="Ocean" type="MeshInstance3D" parent="."]
+script = ExtResource("6_ocean")
+follow_path = NodePath("../Camera")
 
 [node name="Ships" type="Node3D" parent="."]
 script = ExtResource("2_fleet")

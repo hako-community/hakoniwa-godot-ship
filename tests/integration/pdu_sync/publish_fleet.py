@@ -2,7 +2,7 @@
 """PDU 同期統合テスト用の船隊パブリッシャ（箱庭アセット）。
 
 expected.json の既知値を、ビューアと同じ PDU 定義（config/comm/pdu_def.json）で
-OwnShip（pos / joint_states）と他船（pos）へ 20 ms ごとに書き込む。
+OwnShip（pos / joint_states / maritime_disturbance）と他船（pos）へ 20 ms ごとに書き込む。
 
 usage: python publish_fleet.py <pdu_def.json> <expected.json>
 """
@@ -14,6 +14,9 @@ from hakoniwa_pdu.impl.shm_communication_service import ShmCommunicationService
 from hakoniwa_pdu.pdu_manager import PduManager
 from hakoniwa_pdu.pdu_msgs.geometry_msgs.pdu_conv_Twist import py_to_pdu_Twist
 from hakoniwa_pdu.pdu_msgs.geometry_msgs.pdu_pytype_Twist import Twist
+from hakoniwa_pdu.pdu_msgs.hako_msgs.pdu_conv_Disturbance import py_to_pdu_Disturbance
+from hakoniwa_pdu.pdu_msgs.hako_msgs.pdu_pytype_Disturbance import Disturbance
+from hakoniwa_pdu.pdu_msgs.hako_msgs.pdu_pytype_DisturbanceUserCustom import DisturbanceUserCustom
 from hakoniwa_pdu.pdu_msgs.sensor_msgs.pdu_conv_JointState import py_to_pdu_JointState
 from hakoniwa_pdu.pdu_msgs.sensor_msgs.pdu_pytype_JointState import JointState
 
@@ -42,6 +45,22 @@ def _joint_state(values: dict) -> JointState:
     return msg
 
 
+def _disturbance(wave: dict) -> Disturbance:
+    """ship_io.make_disturbance と同じ d_user_custom 配置（ShipHydroPlugin::parse_from_custom が読む形）。"""
+    customs = []
+    for data in (
+        [1.0, 10000.0, 0.0],                                   # gps_strength, visibility_m, rain_rate_mm_h
+        [0.0, 0.0, 0.0, 1025.0, wave["water_depth_m"], 0.0],   # current_enu, density, depth, tide
+        [wave["hs_m"], wave["tp_s"], wave["wave_dir_rad"], wave["gamma"], float(wave["seed"])],
+    ):
+        c = DisturbanceUserCustom()
+        c.data = [float(v) for v in data]
+        customs.append(c)
+    d = Disturbance()
+    d.d_user_custom = customs
+    return d
+
+
 def build_frames(expected: dict) -> list:
     frames = []
     for robot, data in expected.items():
@@ -50,6 +69,8 @@ def build_frames(expected: dict) -> list:
         frames.append((robot, "pos", py_to_pdu_Twist(_twist(data["pos"]))))
         if "joint_states" in data:
             frames.append((robot, "joint_states", py_to_pdu_JointState(_joint_state(data["joint_states"]))))
+    if "_wave" in expected:
+        frames.append(("OwnShip", "maritime_disturbance", py_to_pdu_Disturbance(_disturbance(expected["_wave"]))))
     return frames
 
 

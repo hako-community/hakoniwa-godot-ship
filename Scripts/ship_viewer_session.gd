@@ -1,11 +1,12 @@
 extends Node
-## ビューアの起動モード管理と自己検証（SHP-23 Step 2）。
+## ビューアの起動モード管理と自己検証（SHP-23 Step 2〜3）。
 ##
 ## user args（`Godot ... -- <args>`）:
 ##   --smoke      オフラインで船隊生成・関節ノード解決・シーン向きを検証し HAKONIWA_GODOT_SHIP_BOOT_OK で終了
 ##   --hako       HakoniwaSimNode を初期化して PDU 同期を有効化（共有メモリ Z:/mmap_ship、conductor が必要）
 ##   --hako-start --hako に加え、初期化後にシミュレーション開始を要求
-##   --sync-test  --hako-start に加え、tests/integration/pdu_sync/expected.json の値を受信・反映できたか検証し終了
+##   --sync-test  --hako-start に加え、tests/integration/pdu_sync/expected.json の値（船の姿勢・関節・波浪）を
+##                受信・反映できたか検証し終了
 ##   --screenshot=<path>  --smoke と併用（ウィンドウ実行時のみ）。検証後の画面を PNG 保存
 
 const SMOKE_FRAMES := 10
@@ -13,17 +14,21 @@ const SYNC_TEST_TIMEOUT_SEC := 30.0
 const SYNC_EXPECTED_PATH := "res://tests/integration/pdu_sync/expected.json"
 const POS_TOLERANCE_M := 1.0e-3
 const ANGLE_TOLERANCE := 1.0e-3
+const DisturbanceSync = preload("res://Scripts/disturbance_sync.gd")
 
 @export var fleet_path: NodePath = ^"../Ships"
 @export var sim_path: NodePath = ^"../Sim"
 @export var camera_path: NodePath = ^"../Camera"
 @export var sun_path: NodePath = ^"../Sun"
+@export var ocean_path: NodePath = ^"../Ocean"
 
 var status_text: String = "offline"
 
 var _args := PackedStringArray()
 var _fleet: Node3D
 var _sim: Node
+var _ocean: Node
+var _offline_time := 0.0
 var _frames := 0
 var _sync_elapsed := 0.0
 var _sync_expected: Dictionary = {}
@@ -33,6 +38,7 @@ func _ready() -> void:
 	_args = OS.get_cmdline_user_args()
 	_fleet = get_node(fleet_path)
 	_sim = get_node(sim_path)
+	_ocean = get_node(ocean_path)
 
 	var err: String = _fleet.build()
 	if not err.is_empty():
@@ -43,10 +49,15 @@ func _ready() -> void:
 		_start_hakoniwa()
 	else:
 		_fleet.apply_preview_poses()
-		status_text = "offline (preview poses)"
+		_ocean.set_wave_params(_fleet.fleet.get("preview_wave", {}))
+		status_text = "offline (preview poses / preview_wave)"
 
 func _physics_process(delta: float) -> void:
 	_frames += 1
+	if _sim.get_sync_state() == _sim.SYNC_STATE_UNINITIALIZED:
+		# オフライン: ローカル時刻で波を進める（箱庭接続時は DisturbanceSync が sim 時刻を渡す）
+		_offline_time += delta
+		_ocean.set_time(_offline_time)
 	if _has("--smoke") and _frames == SMOKE_FRAMES:
 		_run_smoke_checks()
 	if _has("--sync-test") and not _sync_expected.is_empty():
@@ -60,6 +71,15 @@ func _physics_process(delta: float) -> void:
 
 func _start_hakoniwa() -> void:
 	_fleet.attach_sync(_sim)
+	var disturbance: Dictionary = _fleet.fleet.get("disturbance", {})
+	if not disturbance.is_empty():
+		var dist_sync := DisturbanceSync.new()
+		dist_sync.name = "DisturbanceSync"
+		dist_sync.sim = _sim
+		dist_sync.ocean = _ocean
+		dist_sync.robot_name = str(disturbance["robot"])
+		dist_sync.pdu_name = str(disturbance["pdu"])
+		add_child(dist_sync)
 	_sim.simulation_step.connect(func(_s, _w): _sync_steps += 1)
 	var ret: int = _sim.initialize()
 	if ret != 0:
@@ -89,6 +109,11 @@ func _run_smoke_checks() -> void:
 		var forward := -(get_node(path) as Node3D).global_basis.z
 		if forward.y >= 0.0:
 			problems.append("%s faces upward: forward=%s" % [path, forward])
+	# preview_wave が海面に展開されているか（物理プラグインと同じ 32 成分・有効化閾値）
+	if not _ocean.wave_active or _ocean.wave.component_count() != _ocean.NUM_COMPONENTS:
+		problems.append("ocean wave not active: active=%s components=%d" % [_ocean.wave_active, _ocean.wave.component_count()])
+	elif _ocean.sim_time_sec <= 0.0:
+		problems.append("ocean time not advancing")
 	# preview_pose が FLU→Godot 規約どおりに配置されているか
 	for ship in _fleet.get_ship_configs():
 		problems.append_array(_check_pose(str(ship["robot"]), ship.get("preview_pose", {})))
@@ -111,6 +136,21 @@ func _check_sync() -> PackedStringArray:
 		problems.append_array(_check_pose(robot, expected.get("pos", {})))
 		if expected.has("joint_states"):
 			problems.append_array(_check_joints(robot, expected["joint_states"]))
+	if _sync_expected.has("_wave"):
+		problems.append_array(_check_wave(_sync_expected["_wave"]))
+	return problems
+
+## Disturbance PDU の波浪パラメータが海面に反映され、箱庭時刻で進んでいるか
+func _check_wave(expected: Dictionary) -> PackedStringArray:
+	var problems := PackedStringArray()
+	var actual: Dictionary = _ocean.get_wave_params()
+	for key in expected.keys():
+		if absf(float(actual.get(key, NAN)) - float(expected[key])) > 1.0e-9:
+			problems.append("wave %s=%s expected %s" % [key, actual.get(key), expected[key]])
+	if not _ocean.wave_active:
+		problems.append("wave not active")
+	if _ocean.sim_time_sec <= 0.0:
+		problems.append("wave time not advancing with simulation (t=%s)" % _ocean.sim_time_sec)
 	return problems
 
 ## 船体姿勢を独立計算した期待値と比較する。pos.angular.y は mujoco-runtime 規約（= -pitch）。

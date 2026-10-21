@@ -1,7 +1,18 @@
 {
-  "_comment": "publish_fleet.py が書き込み、ship_viewer_session.gd (--sync-test) が検証する既知値。pos.angular は hakoniwa-mujoco-runtime 規約（roll, asin(R20) = -pitch, yaw）[rad]",
+  "_comment": "publish_fleet.py が書き込み、ship_viewer_session.gd (--sync-test) が検証する既知値。pos.angular は hakoniwa-mujoco-runtime 規約（roll, asin(R20) = -pitch, yaw）[rad]。_wave は OwnShip/maritime_disturbance（hako_msgs/Disturbance）の d_user_custom[1][4]=水深, d_user_custom[2]=[Hs, Tp, 波向, gamma, seed] として送る",
   "OwnShip": {
-    "pos": { "linear": { "x": 120.0, "y": 45.0, "z": 0.4 }, "angular": { "x": 0.05, "y": -0.03, "z": 0.5236 } },
+    "pos": {
+      "linear": {
+        "x": 120.0,
+        "y": 45.0,
+        "z": 0.4
+      },
+      "angular": {
+        "x": 0.05,
+        "y": -0.03,
+        "z": 0.5236
+      }
+    },
     "joint_states": {
       "joint_rudder_main_rudder": 0.1745,
       "joint_propeller_main_prop": 1.2,
@@ -10,12 +21,53 @@
     }
   },
   "TargetShip01": {
-    "pos": { "linear": { "x": 900.0, "y": 300.0, "z": 0.0 }, "angular": { "x": 0.0, "y": 0.0, "z": 3.1416 } }
+    "pos": {
+      "linear": {
+        "x": 900.0,
+        "y": 300.0,
+        "z": 0.0
+      },
+      "angular": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 3.1416
+      }
+    }
   },
   "TargetShip02": {
-    "pos": { "linear": { "x": 500.0, "y": -400.0, "z": 0.0 }, "angular": { "x": 0.0, "y": 0.0, "z": 1.5708 } }
+    "pos": {
+      "linear": {
+        "x": 500.0,
+        "y": -400.0,
+        "z": 0.0
+      },
+      "angular": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.5708
+      }
+    }
   },
   "TargetShipFishing": {
-    "pos": { "linear": { "x": 250.0, "y": 120.0, "z": 0.1 }, "angular": { "x": -0.08, "y": 0.02, "z": -0.8 } }
+    "pos": {
+      "linear": {
+        "x": 250.0,
+        "y": 120.0,
+        "z": 0.1
+      },
+      "angular": {
+        "x": -0.08,
+        "y": 0.02,
+        "z": -0.8
+      }
+    }
+  },
+  "_wave": {
+    "hs_m": 3.2,
+    "tp_s": 9.5,
+    "wave_dir_rad": 1.1,
+    "gamma": 2.0,
+    "seed": 2024,
+    "water_depth_m": 35.0
   }
 }

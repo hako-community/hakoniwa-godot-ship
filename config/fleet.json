@@ -2,31 +2,87 @@
   "version": 1,
   "asset_name": "GodotShipViewer",
   "pdu_config": "../../pdu_config_ship.json",
+  "disturbance": {
+    "robot": "OwnShip",
+    "pdu": "maritime_disturbance"
+  },
+  "preview_wave": {
+    "hs_m": 2.5,
+    "tp_s": 8.0,
+    "wave_dir_rad": 0.5,
+    "gamma": 3.3,
+    "seed": 42,
+    "water_depth_m": 100.0
+  },
   "ships": [
     {
       "robot": "OwnShip",
       "model": "container_749gt",
       "pos_pdu": "pos",
       "joint_states_pdu": "joint_states",
-      "preview_pose": { "linear": { "x": 0.0, "y": 0.0, "z": 0.0 }, "angular": { "x": 0.0, "y": 0.0, "z": 0.0 } }
+      "preview_pose": {
+        "linear": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "angular": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      }
     },
     {
       "robot": "TargetShip01",
       "model": "container_700teu",
       "pos_pdu": "pos",
-      "preview_pose": { "linear": { "x": 600.0, "y": 250.0, "z": 0.0 }, "angular": { "x": 0.0, "y": 0.0, "z": 3.14159 } }
+      "preview_pose": {
+        "linear": {
+          "x": 600.0,
+          "y": 250.0,
+          "z": 0.0
+        },
+        "angular": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 3.14159
+        }
+      }
     },
     {
       "robot": "TargetShip02",
       "model": "ferry_seto",
       "pos_pdu": "pos",
-      "preview_pose": { "linear": { "x": 350.0, "y": -300.0, "z": 0.0 }, "angular": { "x": 0.0, "y": 0.0, "z": 1.5708 } }
+      "preview_pose": {
+        "linear": {
+          "x": 350.0,
+          "y": -300.0,
+          "z": 0.0
+        },
+        "angular": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 1.5708
+        }
+      }
     },
     {
       "robot": "TargetShipFishing",
       "model": "fishing_boat",
       "pos_pdu": "pos",
-      "preview_pose": { "linear": { "x": 200.0, "y": 80.0, "z": 0.0 }, "angular": { "x": 0.0, "y": 0.0, "z": -0.8 } }
+      "preview_pose": {
+        "linear": {
+          "x": 200.0,
+          "y": 80.0,
+          "z": 0.0
+        },
+        "angular": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.8
+        }
+      }
     }
   ]
 }
