@@ -1,0 +1,21 @@
+{
+  "_comment": "publish_fleet.py が書き込み、ship_viewer_session.gd (--sync-test) が検証する既知値。pos.angular は hakoniwa-mujoco-runtime 規約（roll, asin(R20) = -pitch, yaw）[rad]",
+  "OwnShip": {
+    "pos": { "linear": { "x": 120.0, "y": 45.0, "z": 0.4 }, "angular": { "x": 0.05, "y": -0.03, "z": 0.5236 } },
+    "joint_states": {
+      "joint_rudder_main_rudder": 0.1745,
+      "joint_propeller_main_prop": 1.2,
+      "joint_radar_radar_xband": 0.7,
+      "joint_radar_radar_sband": -0.4
+    }
+  },
+  "TargetShip01": {
+    "pos": { "linear": { "x": 900.0, "y": 300.0, "z": 0.0 }, "angular": { "x": 0.0, "y": 0.0, "z": 3.1416 } }
+  },
+  "TargetShip02": {
+    "pos": { "linear": { "x": 500.0, "y": -400.0, "z": 0.0 }, "angular": { "x": 0.0, "y": 0.0, "z": 1.5708 } }
+  },
+  "TargetShipFishing": {
+    "pos": { "linear": { "x": 250.0, "y": 120.0, "z": 0.1 }, "angular": { "x": -0.08, "y": 0.02, "z": -0.8 } }
+  }
+}

@@ -1,0 +1,8 @@
+[
+  {
+    "channel_id": 23,
+    "pdu_size": 72,
+    "name": "pos",
+    "type": "geometry_msgs/Twist"
+  }
+]

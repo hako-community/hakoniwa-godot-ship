@@ -1,0 +1,38 @@
+{
+  "paths": [
+    {
+      "id": "OwnShip",
+      "path": "pdutypes/OwnShip.json"
+    },
+    {
+      "id": "TargetShip01",
+      "path": "pdutypes/TargetShip01.json"
+    },
+    {
+      "id": "TargetShip02",
+      "path": "pdutypes/TargetShip02.json"
+    },
+    {
+      "id": "TargetShipFishing",
+      "path": "pdutypes/TargetShipFishing.json"
+    }
+  ],
+  "robots": [
+    {
+      "name": "OwnShip",
+      "pdutypes_id": "OwnShip"
+    },
+    {
+      "name": "TargetShip01",
+      "pdutypes_id": "TargetShip01"
+    },
+    {
+      "name": "TargetShip02",
+      "pdutypes_id": "TargetShip02"
+    },
+    {
+      "name": "TargetShipFishing",
+      "pdutypes_id": "TargetShipFishing"
+    }
+  ]
+}

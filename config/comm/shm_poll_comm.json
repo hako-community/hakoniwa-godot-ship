@@ -1,0 +1,51 @@
+{
+  "protocol": "shm",
+  "impl_type": "poll",
+  "asset_name": "GodotShipViewer",
+  "name": "ship_viewer_shm",
+  "direction": "inout",
+  "io": {
+    "robots": [
+      {
+        "name": "OwnShip",
+        "pdu": [
+          {
+            "name": "pos",
+            "notify_on_recv": false
+          },
+          {
+            "name": "joint_states",
+            "notify_on_recv": false
+          }
+        ]
+      },
+      {
+        "name": "TargetShip01",
+        "pdu": [
+          {
+            "name": "pos",
+            "notify_on_recv": false
+          }
+        ]
+      },
+      {
+        "name": "TargetShip02",
+        "pdu": [
+          {
+            "name": "pos",
+            "notify_on_recv": false
+          }
+        ]
+      },
+      {
+        "name": "TargetShipFishing",
+        "pdu": [
+          {
+            "name": "pos",
+            "notify_on_recv": false
+          }
+        ]
+      }
+    ]
+  }
+}

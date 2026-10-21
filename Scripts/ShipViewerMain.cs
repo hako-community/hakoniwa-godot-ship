@@ -3,43 +3,29 @@ using Godot;
 namespace HakoniwaShip;
 
 /// <summary>
-/// SHP-23 Step 1: エントリシーンのルート。
-/// 座標系: 箱庭/MuJoCo は ENU (x=East, y=North, z=Up)、Godot は Y-up 右手系。
-/// 変換は ToGodot() に集約し、Step 2 以降の PDU 同期でも本関数のみを使う。
-/// `-- --smoke` 付きで起動すると数フレーム描画後に HAKONIWA_GODOT_SHIP_BOOT_OK を出力して終了する。
+/// エントリシーンのルート。HUD 表示のみを担当する。
+/// 船隊生成・箱庭接続・起動モード（--smoke / --hako / --sync-test）は Session（ship_viewer_session.gd）が持つ。
+/// 座標系の規約（箱庭 FLU → Godot: x→-Z, y→-X, z→+Y）は ship_fleet.gd の FLU_TO_GODOT に集約。
 /// </summary>
 public partial class ShipViewerMain : Node3D
 {
-    private const int SmokeFrames = 10;
-
-    private bool _smoke;
-    private int _frames;
     private Label _hud;
+    private Node _session;
 
     public override void _Ready()
     {
-        _smoke = System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--smoke") >= 0;
         _hud = GetNodeOrNull<Label>("Hud/Status");
+        _session = GetNodeOrNull("Session");
         GD.Print($"hakoniwa-godot-ship: Godot {Engine.GetVersionInfo()["string"]}, renderer={RenderingServer.GetCurrentRenderingMethod()}");
     }
 
     public override void _Process(double delta)
     {
-        _frames++;
-        if (_hud != null)
+        if (_hud == null)
         {
-            _hud.Text = $"hakoniwa-godot-ship  |  FPS {Engine.GetFramesPerSecond():0}  |  PDU: not connected (Step 2)";
+            return;
         }
-        if (_smoke && _frames >= SmokeFrames)
-        {
-            GD.Print("HAKONIWA_GODOT_SHIP_BOOT_OK");
-            GetTree().Quit(0);
-        }
-    }
-
-    /// <summary>ENU [m] → Godot ワールド座標（East→+X, North→-Z, Up→+Y）。</summary>
-    public static Vector3 ToGodot(double east, double north, double up)
-    {
-        return new Vector3((float)east, (float)up, (float)-north);
+        var status = _session != null ? (string)_session.Get("status_text") : "no session";
+        _hud.Text = $"hakoniwa-godot-ship  |  FPS {Engine.GetFramesPerSecond():0}  |  {status}";
     }
 }

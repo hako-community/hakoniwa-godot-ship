@@ -1,13 +1,15 @@
 # Godot 4+ editor cache and mono/.NET build output
 .godot/
 bin/
+build/
 obj/
 .vs/
 *.user
 
-# Hakoniwa native addon binaries (synced from viewer/hakoniwa-godot build)
-addons/hakoniwa/bin/
 
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Hakoniwa Godot addons (synced from shipnavi/build/hakoniwa-godot by tools/sync_assets.ps1)
+addons/

@@ -1,0 +1,12 @@
+{
+  "message_script_roots": [
+    "res://addons/hakoniwa_msgs/"
+  ],
+  "extensions": [
+    "res://addons/hakoniwa/codecs/builtin_interfaces_codec.gdextension",
+    "res://addons/hakoniwa/codecs/geometry_msgs_codec.gdextension",
+    "res://addons/hakoniwa/codecs/hako_msgs_codec.gdextension",
+    "res://addons/hakoniwa/codecs/sensor_msgs_codec.gdextension",
+    "res://addons/hakoniwa/codecs/std_msgs_codec.gdextension"
+  ]
+}

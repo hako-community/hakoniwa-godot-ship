@@ -1,0 +1,7 @@
+{
+  "type": "buffer",
+  "name": "ship_viewer_latest_buffer",
+  "store": {
+    "mode": "latest"
+  }
+}
