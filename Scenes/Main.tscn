@@ -1,0 +1,59 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/ShipViewerMain.cs" id="1_main"]
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.32, 0.5, 0.75, 1)
+sky_horizon_color = Color(0.7, 0.78, 0.85, 1)
+ground_bottom_color = Color(0.05, 0.12, 0.2, 1)
+ground_horizon_color = Color(0.7, 0.78, 0.85, 1)
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+tonemap_mode = 2
+fog_enabled = true
+fog_light_color = Color(0.7, 0.78, 0.85, 1)
+fog_density = 0.0002
+
+[sub_resource type="StandardMaterial3D" id="sea_mat"]
+albedo_color = Color(0.05, 0.22, 0.35, 1)
+metallic = 0.1
+roughness = 0.15
+
+[sub_resource type="PlaneMesh" id="sea_mesh"]
+material = SubResource("sea_mat")
+size = Vector2(4000, 4000)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.642788, -0.766044, 0, 0.766044, 0.642788, 0, 100, 0)
+shadow_enabled = true
+
+[node name="Sea" type="MeshInstance3D" parent="."]
+mesh = SubResource("sea_mesh")
+
+[node name="Ships" type="Node3D" parent="."]
+
+[node name="Overlays" type="Node3D" parent="."]
+
+[node name="Camera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.819152, -0.573576, 0, 0.573576, 0.819152, 0, 120, 180)
+far = 8000.0
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="Status" type="Label" parent="Hud"]
+offset_left = 12.0
+offset_top = 8.0
+offset_right = 900.0
+offset_bottom = 34.0
+text = "hakoniwa-godot-ship"
