@@ -55,14 +55,13 @@ static func compute_cpa(own_pos: Array, own_vel: Array, own_heading_rad: float,
 	return res
 
 ## CpaOztCalculator::compute_ozt と同一の結果（has_danger / min・max_danger_course_deg / danger_polygon）に加え、
-## 危険進路の一覧 danger_courses_deg と各進路の衝突予測時刻 tcpa_s を返す。
-## 注: C++ の min/max は危険進路列の先頭・末尾なので、危険域が真北（0°/360°）を跨ぐと 0〜358° になる。
-## 描画には min/max ではなく danger_courses_deg（または danger_arcs()）を使うこと。
+## 各進路の衝突予測時刻 tcpa_s を返す。danger_courses_deg / danger_arcs / min・max は C++ の OztSector と同じ定義
+## （min/max は全危険進路を覆う最小の時計回り扇形で、min > max は真北を跨ぐ。K6 で C++ 側を修正済み）。
 static func compute_ozt(own_pos: Array, own_speed_mps: float, tgt_pos: Array, tgt_vel: Array,
 		safe_domain_m: float = 926.0, time_horizon_s: float = 900.0) -> Dictionary:
 	var sector := {
 		"has_danger": false, "min_danger_course_deg": 0.0, "max_danger_course_deg": 0.0,
-		"danger_polygon": [], "danger_courses_deg": [], "tcpa_s": [],
+		"danger_polygon": [], "danger_courses_deg": [], "danger_arcs": [], "tcpa_s": [],
 	}
 	if own_speed_mps <= 0.1:
 		return sector
@@ -75,12 +74,25 @@ static func compute_ozt(own_pos: Array, own_speed_mps: float, tgt_pos: Array, tg
 			sector["danger_courses_deg"].append(deg)
 			sector["tcpa_s"].append(t)
 			sector["danger_polygon"].append([own_pos[0] + vel[0] * t, own_pos[1] + vel[1] * t])
-	var courses: Array = sector["danger_courses_deg"]
-	if not courses.is_empty():
+	var arcs := danger_arcs(sector["danger_courses_deg"])
+	sector["danger_arcs"] = arcs
+	if not arcs.is_empty():
 		sector["has_danger"] = true
-		sector["min_danger_course_deg"] = float(courses.front())
-		sector["max_danger_course_deg"] = float(courses.back())
+		var cover := cover_sector(arcs)
+		sector["min_danger_course_deg"] = float(cover[0])
+		sector["max_danger_course_deg"] = float(cover[1])
 	return sector
+
+## 区間列を覆う最小の時計回り扇形 [start, end]（OztSector::build_arcs() と同じ: 区間間の隙間が最大の箇所の反対側を開始とする）
+static func cover_sector(arcs: Array) -> Array:
+	var widest := 0
+	var widest_gap := -1
+	for i in arcs.size():
+		var gap := posmod(int(arcs[(i + 1) % arcs.size()][0]) - int(arcs[i][1]), 360)
+		if gap > widest_gap:
+			widest_gap = gap
+			widest = i
+	return [arcs[(widest + 1) % arcs.size()][0], arcs[widest][1]]
 
 ## 危険進路の一覧を連続区間 [start_deg, end_deg]（end は区間最後の進路、真北跨ぎは start > end）にまとめる。
 static func danger_arcs(courses_deg: Array, step_deg: int = COURSE_STEP_DEG) -> Array:

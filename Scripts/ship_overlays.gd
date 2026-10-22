@@ -469,7 +469,7 @@ func _update_label_texts() -> void:
 				risk = m["collision_risk"]
 				lines.append("CPA %.2f NM  TCPA %.1f min" % [m["cpa_distance_m"] / NM, m["tcpa_seconds"] / 60.0])
 				var arc_text := PackedStringArray()
-				for arc in CpaOzt.danger_arcs(ozt[robot]["danger_courses_deg"]):
+				for arc in ozt[robot]["danger_arcs"]:
 					arc_text.append("%03d-%03d°" % [arc[0], arc[1]])
 				var ozt_text := " ".join(arc_text) if not arc_text.is_empty() else "none"
 				lines.append("OZT %s" % ozt_text)

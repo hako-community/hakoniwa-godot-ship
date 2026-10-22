@@ -111,8 +111,8 @@ pwsh -File tests/unit/ozt_parity/gen_reference.ps1
 
 - **`radar_points` 契約（ADR D16）**: `sensor_msgs/PointCloud2`、各点は自船ヘディングアップ水平座標（x 前・y 左・z 上）[m]、
   フィールド `x`/`y`/`z`/`intensity` は FLOAT32・リトルエンディアン、`intensity` は推定 RCS [m²]。
-- **OZT の区間表示**: `cpa_ozt.hpp` の `min/max_danger_course_deg` は危険進路列の先頭・末尾のため、危険域が真北を跨ぐと 0〜358° になる。
-  ビューアは危険進路の一覧から連続区間を作り直して表示する（`CpaOzt.danger_arcs()`、跨ぎは `350-004°` のように表示）。
+- **OZT の区間表示**: 危険進路（2° 刻み）を連続区間 `danger_arcs` にまとめ、真北を跨ぐ区間は 1 区間（例 `350-004°`）として表示する。
+  `min/max_danger_course_deg` は全危険進路を覆う最小の時計回り扇形（min > max は真北跨ぎ）で、C++ `OztSector` と同じ定義（K6 で C++ 側を修正）。
 - 線幅・点の大きさは画素指定（自船位置の縮尺から換算）。メッシュは自船原点のローカル座標で作って位置・向きだけ毎フレーム更新し、
   更新時間は 0.5 ms 程度（RTX 4060 Laptop、VSync 無効で約 800 FPS）。
 

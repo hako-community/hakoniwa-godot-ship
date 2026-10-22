@@ -80,15 +80,21 @@ int main() {
             poly += (k ? ", " : "") + vec(s.danger_polygon[k]);
         }
         poly += "]";
+        std::string arcs = "[";
+        for (size_t k = 0; k < s.danger_arcs.size(); ++k) {
+            arcs += (k ? ", [" : "[") + num(s.danger_arcs[k].start_deg) + ", " + num(s.danger_arcs[k].end_deg) + "]";
+        }
+        arcs += "]";
         std::printf(
             "    {\"own_pos\": %s, \"own_speed_mps\": %s, \"tgt_pos\": %s, \"tgt_vel\": %s,"
             " \"safe_domain_m\": %s, \"time_horizon_s\": %s,\n"
             "     \"has_danger\": %s, \"min_danger_course_deg\": %s, \"max_danger_course_deg\": %s,\n"
+            "     \"danger_arcs\": %s,\n"
             "     \"danger_polygon\": %s}%s\n",
             vec(own_pos).c_str(), num(own_speed).c_str(), vec(tgt_pos).c_str(), vec(tgt_vel).c_str(),
             num(safe).c_str(), num(horizon).c_str(),
             boolean(s.has_danger), num(s.min_danger_course_deg).c_str(), num(s.max_danger_course_deg).c_str(),
-            poly.c_str(), i + 1 < kOztCases ? "," : "");
+            arcs.c_str(), poly.c_str(), i + 1 < kOztCases ? "," : "");
     }
     std::printf("  ]\n}\n");
     return 0;

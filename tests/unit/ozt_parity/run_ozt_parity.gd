@@ -41,6 +41,11 @@ func _init() -> void:
 			_problems.append("ozt%d has_danger: %s expected %s" % [i, s["has_danger"], c["has_danger"]])
 		_compare("ozt%d min_course" % i, s["min_danger_course_deg"], c["min_danger_course_deg"])
 		_compare("ozt%d max_course" % i, s["max_danger_course_deg"], c["max_danger_course_deg"])
+		var expected_arcs: Array = []
+		for arc in c["danger_arcs"]:
+			expected_arcs.append([int(arc[0]), int(arc[1])])
+		if s["danger_arcs"] != expected_arcs:
+			_problems.append("ozt%d danger_arcs %s expected %s" % [i, s["danger_arcs"], expected_arcs])
 		var poly: Array = s["danger_polygon"]
 		var expected_poly: Array = c["danger_polygon"]
 		if poly.size() != expected_poly.size():
@@ -90,6 +95,16 @@ func _check_arc_examples() -> void:
 			_problems.append("danger_arcs(%s) = %s expected %s" % [c[0], arcs, c[1]])
 	if not CpaOzt.is_course_dangerous([0, 2, 358], 359.2) or CpaOzt.is_course_dangerous([0, 2, 358], 4.2):
 		_problems.append("is_course_dangerous binning")
+	# 被覆扇形（C++ test_perception_ozt の build_arcs() 単体ケースと同じ）
+	var covers := [
+		[[[358, 2], [100, 100]], [358, 100]],
+		[[[10, 14], [30, 30]], [10, 30]],
+		[[[350, 4]], [350, 4]],
+		[[[0, 358]], [0, 358]],
+	]
+	for c in covers:
+		if CpaOzt.cover_sector(c[0]) != c[1]:
+			_problems.append("cover_sector(%s) = %s expected %s" % [c[0], CpaOzt.cover_sector(c[0]), c[1]])
 
 ## 円環上の連続区間数（独立計算）
 func _count_runs_circular(courses: Array) -> int:
