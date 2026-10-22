@@ -8,7 +8,10 @@ extends Node
 ##   --hako-start --hako に加え、初期化後にシミュレーション開始を要求
 ##   --sync-test  --hako-start に加え、tests/integration/pdu_sync/expected.json の値（船の姿勢・関節・波浪・
 ##                等速直進・レーダ物標）を受信・反映でき、オーバレイ（速度推定・CPA/OZT・物標）が正しいか検証し終了
+##   --plant-test --hako-start に加え、実物理（hakoniwa-mujoco-ship の ship_plant）との結合を検証し終了
+##                （Scripts/plant_coupling_check.gd、期待値は tests/integration/plant_coupling/expected.json）
 ##   --screenshot=<path>  --smoke と併用（ウィンドウ実行時のみ）。検証後の画面を PNG 保存
+##                        --plant-test と併用すると結合検証の終了時の画面を保存
 ##   --smoke-frames=<n>   --smoke の検証を行うフレーム（既定 10。航跡などを見たいときに増やす）
 
 const SMOKE_FRAMES := 10
@@ -25,6 +28,8 @@ const KT := 0.514444
 const DisturbanceSync = preload("res://Scripts/disturbance_sync.gd")
 const RadarEchoSync = preload("res://Scripts/radar_echo_sync.gd")
 const CpaOzt = preload("res://Scripts/cpa_ozt.gd")
+const PlantCouplingCheck = preload("res://Scripts/plant_coupling_check.gd")
+const PLANT_TEST_TIMEOUT_SEC := 240.0
 
 @export var fleet_path: NodePath = ^"../Ships"
 @export var sim_path: NodePath = ^"../Sim"
@@ -60,7 +65,7 @@ func _ready() -> void:
 	_overlays.setup(_fleet, _ocean)
 	get_node(camera_path).target = _fleet.ships.get(_overlays.own_robot)
 
-	if _has("--hako") or _has("--hako-start") or _has("--sync-test"):
+	if _has("--hako") or _has("--hako-start") or _has("--sync-test") or _has("--plant-test"):
 		_start_hakoniwa()
 	else:
 		_fleet.apply_preview_poses()
@@ -77,6 +82,10 @@ func _physics_process(delta: float) -> void:
 		_overlays.update(_offline_time)
 	if _has("--smoke") and _frames == _smoke_frames():
 		_run_smoke_checks()
+	if _has("--plant-test"):
+		_sync_elapsed += delta
+		if _sync_elapsed > PLANT_TEST_TIMEOUT_SEC:
+			_fail("HAKONIWA_GODOT_SHIP_PLANT_TIMEOUT", "no result within %.0f s (is ship_plant running?)" % PLANT_TEST_TIMEOUT_SEC)
 	if _has("--sync-test") and not _sync_expected.is_empty():
 		_sync_elapsed += delta
 		var problems := _check_sync()
@@ -96,6 +105,9 @@ func _start_hakoniwa() -> void:
 		dist_sync.ocean = _ocean
 		dist_sync.robot_name = str(disturbance["robot"])
 		dist_sync.pdu_name = str(disturbance["pdu"])
+		var clock: Dictionary = _fleet.fleet.get("physics_clock", {})
+		dist_sync.clock_robot = str(clock.get("robot", ""))
+		dist_sync.clock_pdu = str(clock.get("pdu", ""))
 		add_child(dist_sync)
 	var radar: Dictionary = _fleet.fleet.get("overlays", {}).get("radar", {})
 	if radar.has("pdu"):
@@ -109,13 +121,25 @@ func _start_hakoniwa() -> void:
 	_sim.simulation_step.connect(func(_s, _w): _sync_steps += 1)
 	# 姿勢同期・レーダ受信の後に接続するので、同じステップで受信した値でオーバレイを更新する
 	_sim.simulation_step.connect(func(simtime_usec, _w): _overlays.update(simtime_usec / 1.0e6))
+	if _has("--plant-test"):
+		# オーバレイ更新の後に接続する（同じステップの姿勢・物標で検証する）
+		var check := PlantCouplingCheck.new()
+		check.name = "PlantCouplingCheck"
+		check.session = self
+		check.sim = _sim
+		check.fleet = _fleet
+		check.ocean = _ocean
+		check.overlays = _overlays
+		check.radar_sync = get_node_or_null("RadarEchoSync")
+		check.dist_sync = get_node_or_null("DisturbanceSync")
+		add_child(check)
 	var ret: int = _sim.initialize()
 	if ret != 0:
 		_fail("HAKONIWA_GODOT_SHIP_HAKO_INIT_FAILED", _sim.get_last_error_text())
 		return
 	status_text = "hakoniwa: initialized (%s)" % _sim.asset_name
 	print("HAKONIWA_GODOT_SHIP_HAKO_INITIALIZED asset=%s" % _sim.asset_name)
-	if _has("--hako-start") or _has("--sync-test"):
+	if _has("--hako-start") or _has("--sync-test") or _has("--plant-test"):
 		ret = _sim.request_start()
 		if ret != 0:
 			_fail("HAKONIWA_GODOT_SHIP_HAKO_START_FAILED", _sim.get_last_error_text())

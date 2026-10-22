@@ -47,6 +47,11 @@ pwsh -File tools/run_viewer.ps1 -Hako
 # -PublisherExpected <json> でパブリッシャにだけ改変値を渡すとミューテーションテストになる（FAIL するのが正）
 pwsh -File tools/run_sync_test.ps1
 
+# 実物理との結合テスト: conductor → ship_plant（hakoniwa-mujoco-ship、事前にビルド）＋ 外乱パブリッシャ → Godot。
+# 時刻（海面を物理時刻で描画）・船体上下動と海面の相関・レーダ物標・関節・自船速度を検証。HAKONIWA_GODOT_SHIP_PLANT_OK / exit 0
+# -Screenshot <png> [-CameraDistance <m>] でウィンドウ表示し、終了時の画面を保存（目視確認用）
+pwsh -File tools/run_plant_test.ps1
+
 # 単体テスト（波面: CPU と Python/C++ 参照・GPU と CPU、CPA/OZT: C++ cpa_ozt.hpp 参照）。-SkipGpu で GPU 不要分のみ
 pwsh -File tools/run_unit_tests.ps1
 
@@ -81,7 +86,7 @@ pwsh -File tests/unit/ozt_parity/gen_reference.ps1
 | パラメータ | `Scripts/disturbance_sync.gd`: `OwnShip/maritime_disturbance` の `d_user_custom[2]=[Hs,Tp,波向,γ,seed]`, `[1][4]=水深` | `run_sync_test.ps1` で受信・反映を検証 |
 
 - 物理プラグインと同じく 32 成分、Hs > 0.01 m で有効、潮位は波面に含めない（`tide_level_m = 0`）。
-- 時刻は箱庭シミュレーション時刻（`simulation_step` の simtime）。オフライン時は `fleet.json` の `preview_wave` をローカル時刻で再生。
+- 時刻は `fleet.json` の `physics_clock`（`OwnShip/joint_states` の header.stamp ＝ 物理の時刻）。物理（`ship_plant`）は conductor の許容遅延内でビューアより先に進む（実測 0.10〜0.12 s）ので、受信した船体姿勢と同じ時刻の海面を描く。stamp が無ければ箱庭シミュレーション時刻。オフライン時は `fleet.json` の `preview_wave` をローカル時刻で再生。
 - `gerstner_displacement`（シェーダ uniform、既定 0）を上げると波頭が尖るが、頂点が水平移動するため物理の標高とは一致しなくなる（見た目用）。
 
 ## 船隊と PDU
@@ -131,7 +136,8 @@ hakoniwa-godot-ship/
 ├─ Scenes/Main.tscn           # 海面・空・太陽・カメラ・HUD、Ships/Codec/Sim/Session
 ├─ Scripts/
 │  ├─ ShipViewerMain.cs       # HUD（状態行、CPA/TCPA/OZT 一覧）
-│  ├─ ship_viewer_session.gd  # 起動モード（--smoke / --hako / --hako-start / --sync-test）と自己検証
+│  ├─ ship_viewer_session.gd  # 起動モード（--smoke / --hako / --hako-start / --sync-test / --plant-test）と自己検証
+│  ├─ plant_coupling_check.gd # 実物理（ship_plant）との結合検証（--plant-test）
 │  ├─ ship_fleet.gd           # fleet.json から船舶生成、同期ノード付与
 │  ├─ ship_pose_sync.gd       # pos のみの他船用姿勢同期
 │  ├─ wave_spectrum.gd        # JONSWAP/Gerstner 決定論的波面（wave_spectrum.hpp の移植）
@@ -146,9 +152,10 @@ hakoniwa-godot-ship/
 ├─ Shaders/                   # wave_common.gdshaderinc / ocean_gerstner / ocean_far
 ├─ tests/
 │  ├─ integration/pdu_sync    # expected.json ＋ publish_fleet.py
+│  ├─ integration/plant_coupling # expected.json（ship_plant との結合検証の期待値）
 │  └─ unit/                   # wave_parity（reference.json ＋ gen_reference.py）、wave_shader_parity、
 │                             # ozt_parity（reference.json ＋ gen_reference.cpp / .ps1）
-└─ tools/                     # run_editor / run_viewer / run_sync_test / run_unit_tests / sync_assets / gen_viewer_config
+└─ tools/                     # run_editor / run_viewer / run_sync_test / run_plant_test / run_unit_tests / sync_assets / gen_viewer_config
 ```
 
 ## ロードマップ（SHP-23）
@@ -157,3 +164,4 @@ hakoniwa-godot-ship/
 - [x] Step 2: 船舶 glb 配置と `ship_sync.profile.json` / PDU 姿勢同期（`viewer/hakoniwa-godot` addon を無改変参照）
 - [x] Step 3: `wave_spectrum.hpp` 互換の決定論的 Gerstner 波面シェーダ
 - [x] Step 4: 工学オーバレイ（レーダ掃引ビーム・物標、AIS ベクトル、OZT 扇形、航跡）
+- [x] Step 5: 実物理（`hakoniwa-mujoco-ship` の `ship_plant`）との結合（海面を物理時刻で描画、`run_plant_test.ps1`）

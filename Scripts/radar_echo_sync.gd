@@ -11,8 +11,13 @@ var overlays: Node = null
 var robot_name: String = ""
 var pdu_name: String = "radar_points"
 
+## 受信した点群の数と最後の header.stamp [s]（物理の走査時刻。結合検証で使う）
+var clouds_received := 0
+var last_stamp_sec := 0.0
+
 var _endpoint = null
 var _typed_endpoint = null
+var _last_key := []
 
 func _ready() -> void:
 	sim.simulation_ready.connect(_on_simulation_ready)
@@ -31,6 +36,12 @@ func _on_simulation_step(_simtime_usec: int, _world_time_usec: int) -> void:
 	_endpoint.process_recv_events()
 	var cloud: Dictionary = _typed_endpoint.recv_dict()
 	if not cloud.is_empty():
+		var stamp: Dictionary = cloud.get("header", {}).get("stamp", {})
+		var key := [int(stamp.get("sec", 0)), int(stamp.get("nanosec", 0)), int(cloud.get("width", 0))]
+		if key != _last_key:
+			_last_key = key
+			clouds_received += 1
+			last_stamp_sec = key[0] + key[1] * 1.0e-9
 		overlays.set_radar_points(parse_points(cloud))
 
 ## PointCloud2 の辞書表現を [x, y, z, intensity] の配列にする。必須フィールドが無ければ空配列。

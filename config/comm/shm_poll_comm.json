@@ -18,6 +18,10 @@
             "notify_on_recv": false
           },
           {
+            "name": "vel",
+            "notify_on_recv": false
+          },
+          {
             "name": "maritime_disturbance",
             "notify_on_recv": false
           },

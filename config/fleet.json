@@ -6,6 +6,10 @@
     "robot": "OwnShip",
     "pdu": "maritime_disturbance"
   },
+  "physics_clock": {
+    "robot": "OwnShip",
+    "pdu": "joint_states"
+  },
   "preview_wave": {
     "hs_m": 2.5,
     "tp_s": 8.0,
@@ -52,6 +56,7 @@
       "model": "container_749gt",
       "pos_pdu": "pos",
       "joint_states_pdu": "joint_states",
+      "vel_pdu": "vel",
       "preview_pose": {
         "linear": {
           "x": 0.0,

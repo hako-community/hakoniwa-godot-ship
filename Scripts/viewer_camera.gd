@@ -4,6 +4,7 @@ extends Camera3D
 ## - oblique: 南側上空から北向きに見下ろす（画面上 ≒ 北）。マウスホイールで距離を変更
 ## - top    : 真上からの正射影・北が画面上（ノースアップ）。マウスホイールで表示範囲を変更
 ## C キーで切替（起動時は user arg `--camera=top` でも指定可）。focus（海面の詳細メッシュの追従先）を注視点に置く。
+## `--camera-distance=<m>` で起動時の距離（oblique）を指定（船体と海面の近接確認用）。
 
 enum Mode { OBLIQUE, TOP }
 
@@ -20,8 +21,12 @@ var _focus: Node3D
 
 func _ready() -> void:
 	_focus = get_node_or_null(focus_path) as Node3D
-	if OS.get_cmdline_user_args().has("--camera=top"):
+	var args := OS.get_cmdline_user_args()
+	if args.has("--camera=top"):
 		mode = Mode.TOP
+	for arg in args:
+		if arg.begins_with("--camera-distance="):
+			distance_m = clampf(arg.trim_prefix("--camera-distance=").to_float(), min_distance_m, max_distance_m)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_C:

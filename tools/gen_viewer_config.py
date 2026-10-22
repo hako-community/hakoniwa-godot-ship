@@ -61,7 +61,7 @@ def build_outputs(fleet: dict) -> dict:
         pdu_def["paths"].append({"id": name, "path": f"pdutypes/{name}.json"})
         pdu_def["robots"].append({"name": name, "pdutypes_id": name})
 
-        subscribed = [ship["pos_pdu"]] + ([ship["joint_states_pdu"]] if "joint_states_pdu" in ship else [])
+        subscribed = [ship["pos_pdu"]] + [ship[k] for k in ("joint_states_pdu", "vel_pdu") if k in ship]
         if fleet.get("disturbance", {}).get("robot") == name:
             subscribed.append(fleet["disturbance"]["pdu"])
         radar = fleet.get("overlays", {}).get("radar", {})
