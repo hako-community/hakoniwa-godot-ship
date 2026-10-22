@@ -13,6 +13,7 @@ extends Node
 ##   --screenshot=<path>  --smoke と併用（ウィンドウ実行時のみ）。検証後の画面を PNG 保存
 ##                        --plant-test と併用すると結合検証の終了時の画面を保存
 ##   --smoke-frames=<n>   --smoke の検証を行うフレーム（既定 10。航跡などを見たいときに増やす）
+##   --no-overlays        工学オーバレイを表示しない（計算・検証は行う。船の外観の確認用）
 
 const SMOKE_FRAMES := 10
 const SYNC_TEST_TIMEOUT_SEC := 30.0
@@ -63,6 +64,8 @@ func _ready() -> void:
 		_fail("HAKONIWA_GODOT_SHIP_FLEET_FAILED", err)
 		return
 	_overlays.setup(_fleet, _ocean)
+	if _has("--no-overlays"):
+		_overlays.visible = false
 	get_node(camera_path).target = _fleet.ships.get(_overlays.own_robot)
 
 	if _has("--hako") or _has("--hako-start") or _has("--sync-test") or _has("--plant-test"):

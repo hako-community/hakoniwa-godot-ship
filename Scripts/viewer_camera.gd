@@ -4,7 +4,8 @@ extends Camera3D
 ## - oblique: 南側上空から北向きに見下ろす（画面上 ≒ 北）。マウスホイールで距離を変更
 ## - top    : 真上からの正射影・北が画面上（ノースアップ）。マウスホイールで表示範囲を変更
 ## C キーで切替（起動時は user arg `--camera=top` でも指定可）。focus（海面の詳細メッシュの追従先）を注視点に置く。
-## `--camera-distance=<m>` で起動時の距離（oblique）を指定（船体と海面の近接確認用）。
+## `--camera-distance=<m>` で起動時の距離、`--camera-elevation-deg=<deg>` で見下ろし角（oblique、既定 63.4°）を指定
+## （船体と海面の近接確認・外観確認用）。
 
 enum Mode { OBLIQUE, TOP }
 
@@ -14,6 +15,8 @@ enum Mode { OBLIQUE, TOP }
 @export var top_size_m: float = 6000.0
 @export var min_distance_m: float = 150.0
 @export var max_distance_m: float = 12000.0
+## oblique の見下ろし角 [deg]（既定は従来の (0.45, 0.9) × 距離 と同じ向き）
+@export var elevation_deg: float = 63.435
 
 var target: Node3D = null
 
@@ -27,6 +30,8 @@ func _ready() -> void:
 	for arg in args:
 		if arg.begins_with("--camera-distance="):
 			distance_m = clampf(arg.trim_prefix("--camera-distance=").to_float(), min_distance_m, max_distance_m)
+		elif arg.begins_with("--camera-elevation-deg="):
+			elevation_deg = clampf(arg.trim_prefix("--camera-elevation-deg=").to_float(), 2.0, 89.0)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_C:
@@ -55,5 +60,7 @@ func _process(_delta: float) -> void:
 		look_at(center, Vector3(-1.0, 0.0, 0.0))
 	else:
 		projection = PROJECTION_PERSPECTIVE
-		global_position = center + Vector3(distance_m * 0.45, distance_m * 0.9, 0.0)
+		var r := distance_m * 1.00623  # 既定の見下ろし角で従来の (0.45, 0.9) × 距離と一致
+		var el := deg_to_rad(elevation_deg)
+		global_position = center + Vector3(r * cos(el), r * sin(el), 0.0)
 		look_at(center, Vector3.UP)
