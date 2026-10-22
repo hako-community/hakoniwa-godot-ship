@@ -1,5 +1,5 @@
 {
-  "_comment": "--plant-test（Scripts/plant_coupling_check.gd）の期待値。船の配置・速力・針路・波浪は hakoniwa-mujoco-ship/config/plant/fleet_encounter.json と同じ値（yaw_deg は東から反時計回り）。lpp_m / beam_m は船体水線面の平均波高を取る範囲、rcs_m2 は MJCF の geom_user 合計（blend2mjcf_ship.py）。waterline_rms_max_m は最小乾舷（漁船 1.07 m）の半分未満 = 船体が浮いて見えたり甲板が沈んで見えたりしない範囲。max_physics_lead_s は物理がビューアより先に進む上限（conductor の --max-delay-usec 100000 ＋ 1 ステップ）。velocity_tolerance_mps は姿勢列から推定した自船速度（5 s 窓の最小二乗）と物理の vel の同じ窓での平均の差の許容（--sync-test の速度推定の許容と同じ）。他船の速力・針路は検証しない（波浪中の操縦性能は物理側の課題として参考表示のみ）。",
+  "_comment": "--plant-test（Scripts/plant_coupling_check.gd）の期待値。船の配置・速力・針路・波浪は hakoniwa-mujoco-ship/config/plant/fleet_encounter.json と同じ値（yaw_deg は東から反時計回り）。lpp_m / beam_m は船体水線面の平均波高を取る範囲、rcs_m2 は MJCF の geom_user 合計（blend2mjcf_ship.py）。waterline_rms_max_m は最小乾舷（漁船 1.07 m）の半分未満 = 船体が浮いて見えたり甲板が沈んで見えたりしない範囲。max_physics_lead_s は物理がビューアより先に進む上限（conductor の --max-delay-usec 100000 ＋ 1 ステップ）。velocity_tolerance_mps は姿勢列から推定した自船速度（5 s 窓の最小二乗）と物理の vel の同じ窓での平均の差の許容（--sync-test の速度推定の許容と同じ）。他船の速力・針路は参考表示のみ（波浪中の速力低下・針路保持は hakoniwa-mujoco-ship の test_fleet_plant が検証）。",
   "own_ship": "OwnShip",
   "settle_s": 20.0,
   "sample_s": 40.0,

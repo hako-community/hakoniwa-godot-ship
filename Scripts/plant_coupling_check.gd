@@ -10,7 +10,8 @@ extends Node
 ##      物標は走査時刻の相対位置を現在の自船位置に置くので、走査からの経過 Δ の相対移動 (v_own − v_tgt)·Δ を補正する
 ##   4. 関節: レーダアンテナ角が 24 rpm × 物理時刻、舵角が針路保持の制限内、Godot のノードに反映
 ##   5. 運動: 姿勢列から推定した自船の対地速度が、物理の vel（船体固定系）と一致
-## を検証して HAKONIWA_GODOT_SHIP_PLANT_OK で終了する。他船の速力・針路は参考表示（波浪中の操縦性能は物理側の課題）。
+## を検証して HAKONIWA_GODOT_SHIP_PLANT_OK で終了する。他船の速力・針路は参考表示（波浪中の操縦性能は物理側の
+## test_fleet_plant が検証する。ここでは物理とビューアの受け渡しだけを見る）。
 ## 期待値は tests/integration/plant_coupling/expected.json。
 
 const EXPECTED_PATH := "res://tests/integration/plant_coupling/expected.json"
