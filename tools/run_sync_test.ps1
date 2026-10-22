@@ -1,10 +1,13 @@
 ﻿# run_sync_test.ps1 - PDU 同期統合テスト（conductor → Python 船隊パブリッシャ → Godot ビューア）
 #
-#   pwsh -File tools/run_sync_test.ps1 [-TimeoutSec 90]
+#   pwsh -File tools/run_sync_test.ps1 [-TimeoutSec 90] [-PublisherExpected <json>]
+#
+# -PublisherExpected: パブリッシャにだけ別の値を渡す（ミューテーションテスト用。ビューアは常に expected.json で検証）
 #
 # 成功時: Godot が HAKONIWA_GODOT_SHIP_SYNC_OK を出力し exit 0。ログは build/sync_test/ に保存。
 param(
-    [int]$TimeoutSec = 90
+    [int]$TimeoutSec = 90,
+    [string]$PublisherExpected = ""
 )
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "godot_env.ps1")
@@ -31,7 +34,8 @@ try {
     Invoke-GodotBuild | Out-Null
     $conductor = Start-Logged "conductor" $CONDUCTOR @("--delta-usec", "20000", "--max-delay-usec", "100000", "--sleep-sec", "$TimeoutSec")
     Start-Sleep -Seconds 2
-    $publisher = Start-Logged "publisher" $PYTHON @("-u", (Join-Path $TEST_DIR "publish_fleet.py"), $PDU_DEF, (Join-Path $TEST_DIR "expected.json"))
+    if (-not $PublisherExpected) { $PublisherExpected = Join-Path $TEST_DIR "expected.json" }
+    $publisher = Start-Logged "publisher" $PYTHON @("-u", (Join-Path $TEST_DIR "publish_fleet.py"), $PDU_DEF, $PublisherExpected)
     Start-Sleep -Seconds 3
     $viewer = Start-Logged "viewer" $GODOT_CONSOLE @("--headless", "--path", $PROJECT_ROOT, "--", "--sync-test")
     if (-not $viewer.WaitForExit($TimeoutSec * 1000)) {

@@ -1,26 +1,37 @@
 extends Node
-## ビューアの起動モード管理と自己検証（SHP-23 Step 2〜3）。
+## ビューアの起動モード管理と自己検証（SHP-23 Step 2〜4）。
 ##
 ## user args（`Godot ... -- <args>`）:
-##   --smoke      オフラインで船隊生成・関節ノード解決・シーン向きを検証し HAKONIWA_GODOT_SHIP_BOOT_OK で終了
+##   --smoke      オフラインで船隊生成・関節ノード解決・シーン向き・工学オーバレイを検証し HAKONIWA_GODOT_SHIP_BOOT_OK で終了
+##                （オフライン時は preview_pose から preview_motion で等速直進させ、オーバレイを動かす）
 ##   --hako       HakoniwaSimNode を初期化して PDU 同期を有効化（共有メモリ Z:/mmap_ship、conductor が必要）
 ##   --hako-start --hako に加え、初期化後にシミュレーション開始を要求
-##   --sync-test  --hako-start に加え、tests/integration/pdu_sync/expected.json の値（船の姿勢・関節・波浪）を
-##                受信・反映できたか検証し終了
+##   --sync-test  --hako-start に加え、tests/integration/pdu_sync/expected.json の値（船の姿勢・関節・波浪・
+##                等速直進・レーダ物標）を受信・反映でき、オーバレイ（速度推定・CPA/OZT・物標）が正しいか検証し終了
 ##   --screenshot=<path>  --smoke と併用（ウィンドウ実行時のみ）。検証後の画面を PNG 保存
+##   --smoke-frames=<n>   --smoke の検証を行うフレーム（既定 10。航跡などを見たいときに増やす）
 
 const SMOKE_FRAMES := 10
 const SYNC_TEST_TIMEOUT_SEC := 30.0
 const SYNC_EXPECTED_PATH := "res://tests/integration/pdu_sync/expected.json"
 const POS_TOLERANCE_M := 1.0e-3
 const ANGLE_TOLERANCE := 1.0e-3
+## 速度推定（最小二乗）の許容誤差 [m/s]。オフラインは位置が厳密な等速直進、箱庭は受信時刻の揺らぎを含む
+const VEL_TOLERANCE_OFFLINE := 0.02
+const VEL_TOLERANCE_SYNC := 0.08
+## 推定速度の誤差で OZT の境界の進路が入れ替わる分を許容する（2° 刻みの進路数）
+const OZT_BOUNDARY_BINS := 2
+const KT := 0.514444
 const DisturbanceSync = preload("res://Scripts/disturbance_sync.gd")
+const RadarEchoSync = preload("res://Scripts/radar_echo_sync.gd")
+const CpaOzt = preload("res://Scripts/cpa_ozt.gd")
 
 @export var fleet_path: NodePath = ^"../Ships"
 @export var sim_path: NodePath = ^"../Sim"
 @export var camera_path: NodePath = ^"../Camera"
 @export var sun_path: NodePath = ^"../Sun"
 @export var ocean_path: NodePath = ^"../Ocean"
+@export var overlays_path: NodePath = ^"../Overlays"
 
 var status_text: String = "offline"
 
@@ -28,6 +39,7 @@ var _args := PackedStringArray()
 var _fleet: Node3D
 var _sim: Node
 var _ocean: Node
+var _overlays: Node
 var _offline_time := 0.0
 var _frames := 0
 var _sync_elapsed := 0.0
@@ -39,11 +51,14 @@ func _ready() -> void:
 	_fleet = get_node(fleet_path)
 	_sim = get_node(sim_path)
 	_ocean = get_node(ocean_path)
+	_overlays = get_node(overlays_path)
 
 	var err: String = _fleet.build()
 	if not err.is_empty():
 		_fail("HAKONIWA_GODOT_SHIP_FLEET_FAILED", err)
 		return
+	_overlays.setup(_fleet, _ocean)
+	get_node(camera_path).target = _fleet.ships.get(_overlays.own_robot)
 
 	if _has("--hako") or _has("--hako-start") or _has("--sync-test"):
 		_start_hakoniwa()
@@ -58,7 +73,9 @@ func _physics_process(delta: float) -> void:
 		# オフライン: ローカル時刻で波を進める（箱庭接続時は DisturbanceSync が sim 時刻を渡す）
 		_offline_time += delta
 		_ocean.set_time(_offline_time)
-	if _has("--smoke") and _frames == SMOKE_FRAMES:
+		_fleet.apply_preview_poses(_offline_time)
+		_overlays.update(_offline_time)
+	if _has("--smoke") and _frames == _smoke_frames():
 		_run_smoke_checks()
 	if _has("--sync-test") and not _sync_expected.is_empty():
 		_sync_elapsed += delta
@@ -80,7 +97,18 @@ func _start_hakoniwa() -> void:
 		dist_sync.robot_name = str(disturbance["robot"])
 		dist_sync.pdu_name = str(disturbance["pdu"])
 		add_child(dist_sync)
+	var radar: Dictionary = _fleet.fleet.get("overlays", {}).get("radar", {})
+	if radar.has("pdu"):
+		var radar_sync := RadarEchoSync.new()
+		radar_sync.name = "RadarEchoSync"
+		radar_sync.sim = _sim
+		radar_sync.overlays = _overlays
+		radar_sync.robot_name = str(radar["robot"])
+		radar_sync.pdu_name = str(radar["pdu"])
+		add_child(radar_sync)
 	_sim.simulation_step.connect(func(_s, _w): _sync_steps += 1)
+	# 姿勢同期・レーダ受信の後に接続するので、同じステップで受信した値でオーバレイを更新する
+	_sim.simulation_step.connect(func(simtime_usec, _w): _overlays.update(simtime_usec / 1.0e6))
 	var ret: int = _sim.initialize()
 	if ret != 0:
 		_fail("HAKONIWA_GODOT_SHIP_HAKO_INIT_FAILED", _sim.get_last_error_text())
@@ -114,9 +142,19 @@ func _run_smoke_checks() -> void:
 		problems.append("ocean wave not active: active=%s components=%d" % [_ocean.wave_active, _ocean.wave.component_count()])
 	elif _ocean.sim_time_sec <= 0.0:
 		problems.append("ocean time not advancing")
-	# preview_pose が FLU→Godot 規約どおりに配置されているか
+	# preview_pose（＋ preview_motion の等速直進）が FLU→Godot 規約どおりに配置されているか
+	var truth_vel := {}
 	for ship in _fleet.get_ship_configs():
-		problems.append_array(_check_pose(str(ship["robot"]), ship.get("preview_pose", {})))
+		var pose: Dictionary = _fleet.preview_pose_at(ship, _offline_time)
+		problems.append_array(_check_pose(str(ship["robot"]), pose))
+		var speed := float(ship.get("preview_motion", {}).get("sog_kt", 0.0)) * KT
+		var yaw := float(pose.get("angular", {}).get("z", 0.0))
+		truth_vel[str(ship["robot"])] = [speed * cos(yaw), speed * sin(yaw)]
+	problems.append_array(_check_overlays(truth_vel, VEL_TOLERANCE_OFFLINE))
+	if _overlays.ozt.values().all(func(s): return not s["has_danger"]):
+		problems.append("preview scenario has no OZT danger (fleet.json preview_pose / preview_motion)")
+	if _overlays.get_layer("radar").get_surface_count() == 0:
+		problems.append("radar overlay not drawn")
 	if not problems.is_empty():
 		_fail("HAKONIWA_GODOT_SHIP_SMOKE_FAILED", "\n  ".join(problems))
 		return
@@ -133,11 +171,104 @@ func _check_sync() -> PackedStringArray:
 		if robot.begins_with("_"):
 			continue
 		var expected: Dictionary = _sync_expected[robot]
-		problems.append_array(_check_pose(robot, expected.get("pos", {})))
+		problems.append_array(_check_pose(robot, expected.get("pos", {}), _sync_expected.get("_motion", {}).get(robot, [])))
 		if expected.has("joint_states"):
 			problems.append_array(_check_joints(robot, expected["joint_states"]))
 	if _sync_expected.has("_wave"):
 		problems.append_array(_check_wave(_sync_expected["_wave"]))
+	var motion: Dictionary = _sync_expected.get("_motion", {})
+	if not motion.is_empty():
+		var truth_vel := {}
+		for robot in _fleet.ships.keys():
+			truth_vel[robot] = motion.get(robot, [0.0, 0.0])
+		# 速度推定は窓（velocity_window_s）がある程度埋まってから判定する
+		var own_samples: Array = _overlays.tracks[_overlays.own_robot]["samples"]
+		if own_samples.size() < 2 or own_samples.back()[0] - own_samples[0][0] < 2.0:
+			problems.append("velocity window not filled yet")
+		else:
+			problems.append_array(_check_overlays(truth_vel, VEL_TOLERANCE_SYNC))
+			if _overlays.ozt.values().all(func(s): return not s["has_danger"]):
+				problems.append("sync scenario has no OZT danger")
+	if _sync_expected.has("_radar"):
+		problems.append_array(_check_radar(_sync_expected["_radar"]))
+	return problems
+
+## オーバレイの検証: 速度推定・航跡・タグ文言・CPA/OZT（真の速度で独立計算した値との比較）。
+## truth_vel: robot -> ENU 速度 [m/s]
+func _check_overlays(truth_vel: Dictionary, vel_tolerance: float) -> PackedStringArray:
+	var problems := PackedStringArray()
+	var own_robot: String = _overlays.own_robot
+	for ship in _fleet.get_ship_configs():
+		var robot := str(ship["robot"])
+		var tr: Dictionary = _overlays.tracks[robot]
+		var v: Array = truth_vel[robot]
+		var err := Vector2(tr["vel"][0] - v[0], tr["vel"][1] - v[1]).length()
+		if err > vel_tolerance:
+			problems.append("%s: estimated velocity %s expected %s (err %.4f m/s)" % [robot, tr["vel"], v, err])
+		if tr["trail"].is_empty():
+			problems.append("%s: no trail points" % robot)
+		var text: String = _overlays.get_label_text(robot)
+		var ais: Dictionary = ship.get("ais", {})
+		if robot == own_robot:
+			if not text.contains("(OWN)"):
+				problems.append("%s: own ship tag %s" % [robot, text.c_escape()])
+		elif bool(ais.get("has_ais", false)):
+			if not text.contains("MMSI %d\n" % int(ais.get("mmsi", 0))) or not text.contains(str(ais.get("name", ""))):
+				problems.append("%s: AIS tag %s" % [robot, text.c_escape()])
+		elif not text.contains("NON-AIS"):
+			problems.append("%s: non-AIS tag %s" % [robot, text.c_escape()])
+	if not problems.is_empty():
+		return problems
+
+	# CPA/OZT: 表示中の自船・他船位置と真の速度から独立に計算した結果と比較
+	var cfg: Dictionary = _overlays.config.get("ozt", {})
+	var safe_m := float(cfg.get("safe_domain_m", 926.0))
+	var horizon_s := float(cfg.get("time_horizon_s", 900.0))
+	var own_pos: Array = _overlays.tracks[own_robot]["pos"]
+	var own_v: Array = truth_vel[own_robot]
+	var own_speed := Vector2(own_v[0], own_v[1]).length()
+	for robot in _fleet.ships.keys():
+		if robot == own_robot:
+			continue
+		if not _overlays.ozt.has(robot):
+			problems.append("%s: OZT not computed" % robot)
+			continue
+		var tgt_pos: Array = _overlays.tracks[robot]["pos"]
+		var expected := CpaOzt.compute_ozt(own_pos, own_speed, tgt_pos, truth_vel[robot], safe_m, horizon_s)
+		var actual: Dictionary = _overlays.ozt[robot]
+		var diff := 0
+		for c in actual["danger_courses_deg"]:
+			if not expected["danger_courses_deg"].has(c):
+				diff += 1
+		for c in expected["danger_courses_deg"]:
+			if not actual["danger_courses_deg"].has(c):
+				diff += 1
+		if diff > OZT_BOUNDARY_BINS:
+			problems.append("%s: OZT courses %s expected %s" % [robot, CpaOzt.danger_arcs(actual["danger_courses_deg"]), CpaOzt.danger_arcs(expected["danger_courses_deg"])])
+		var m := CpaOzt.compute_cpa(own_pos, own_v, atan2(own_v[0], own_v[1]), tgt_pos, truth_vel[robot], safe_m, horizon_s)
+		if absf(float(_overlays.cpa[robot]["cpa_distance_m"]) - float(m["cpa_distance_m"])) > 10.0:
+			problems.append("%s: CPA %.1f m expected %.1f m" % [robot, _overlays.cpa[robot]["cpa_distance_m"], m["cpa_distance_m"]])
+	return problems
+
+## レーダ物標: 受信点数と、自船の船首・左舷方向（Godot の基底から独立に求める）で置いた世界位置の一致。
+## 原点はオーバレイが物標を置いたときの自船位置（検証時点では船が 1 ステップ進んでいるため）。
+func _check_radar(points: Array) -> PackedStringArray:
+	var problems := PackedStringArray()
+	var echoes: Array = _overlays.radar_echoes_enu
+	if echoes.size() != points.size():
+		return PackedStringArray(["radar echoes %d expected %d" % [echoes.size(), points.size()]])
+	var own: Node3D = _fleet.ships[_overlays.own_robot]
+	var model: Node3D = own.get_node("Adapter/Model")
+	var fwd := Vector3(-model.global_basis.z.x, 0.0, -model.global_basis.z.z).normalized()
+	var left := Vector3.UP.cross(fwd)
+	for i in points.size():
+		var p: Array = points[i]
+		var o: Array = _overlays.tracks[_overlays.own_robot]["pos"]
+		var g := fwd * float(p[0]) + left * float(p[1])
+		var expected := Vector2(o[0] - g.z, o[1] - g.x)  # Godot → ENU（東 = -z, 北 = -x）
+		var e: Array = echoes[i]
+		if Vector2(e[0], e[1]).distance_to(expected) > 0.05 or absf(float(e[2]) - float(p[3])) > 1.0e-3:
+			problems.append("radar echo %d: %s expected (%.2f, %.2f, rcs %s)" % [i, e, expected.x, expected.y, p[3]])
 	return problems
 
 ## Disturbance PDU の波浪パラメータが海面に反映され、箱庭時刻で進んでいるか
@@ -154,7 +285,8 @@ func _check_wave(expected: Dictionary) -> PackedStringArray:
 	return problems
 
 ## 船体姿勢を独立計算した期待値と比較する。pos.angular.y は mujoco-runtime 規約（= -pitch）。
-func _check_pose(robot: String, pos_pdu: Dictionary) -> PackedStringArray:
+## vel（ENU [m/s]）を渡すと、位置は pos_pdu を始点とする等速直進の直線上にあるかで判定する（受信時刻が不明なため）。
+func _check_pose(robot: String, pos_pdu: Dictionary, vel: Array = []) -> PackedStringArray:
 	var problems := PackedStringArray()
 	var root: Node3D = _fleet.ships.get(robot)
 	if root == null:
@@ -168,6 +300,11 @@ func _check_pose(robot: String, pos_pdu: Dictionary) -> PackedStringArray:
 
 	var c: Basis = _fleet.FLU_TO_GODOT
 	var expected_pos := c * flu_pos
+	if not vel.is_empty():
+		# 直線上の最近点を期待位置とする（進行方向の逆には戻らない）
+		var dir := c * Vector3(vel[0], vel[1], 0.0)
+		var s := maxf(0.0, (root.global_position - expected_pos).dot(dir) / maxf(dir.length_squared(), 1e-12))
+		expected_pos += dir * s
 	if root.global_position.distance_to(expected_pos) > POS_TOLERANCE_M:
 		problems.append("%s: position %s expected %s" % [robot, root.global_position, expected_pos])
 
@@ -205,6 +342,10 @@ func _check_joints(robot: String, joint_values: Dictionary) -> PackedStringArray
 				problems.append("%s: joint %s basis %s expected %s" % [robot, joint_name, node.basis, expected])
 				break
 	return problems
+
+func _smoke_frames() -> int:
+	var n := _arg_value("--smoke-frames=")
+	return int(n) if n.is_valid_int() else SMOKE_FRAMES
 
 func _has(arg: String) -> bool:
 	return _args.has(arg)

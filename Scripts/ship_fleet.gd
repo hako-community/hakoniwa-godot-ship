@@ -49,10 +49,23 @@ func build() -> String:
 func get_ship_configs() -> Array:
 	return fleet.get("ships", [])
 
-## PDU 未接続時の配置（fleet.json の preview_pose、PDU と同じ Twist 形式）。
-func apply_preview_poses() -> void:
+## PDU 未接続時の配置（fleet.json の preview_pose、PDU と同じ Twist 形式）。t [s] は preview_motion による等速直進の経過時間。
+func apply_preview_poses(t: float = 0.0) -> void:
 	for ship in get_ship_configs():
-		apply_pose(str(ship["robot"]), ship.get("preview_pose", {}))
+		apply_pose(str(ship["robot"]), preview_pose_at(ship, t))
+
+## preview_pose から船首方位（ENU ヨー: 東から反時計回り）へ preview_motion.sog_kt で t 秒進んだ姿勢
+static func preview_pose_at(ship: Dictionary, t: float) -> Dictionary:
+	var pose: Dictionary = ship.get("preview_pose", {}).duplicate(true)
+	var speed := float(ship.get("preview_motion", {}).get("sog_kt", 0.0)) * 0.514444
+	if speed == 0.0 or t == 0.0:
+		return pose
+	var lin: Dictionary = pose.get("linear", {})
+	var yaw := float(pose.get("angular", {}).get("z", 0.0))
+	lin["x"] = float(lin.get("x", 0.0)) + speed * cos(yaw) * t
+	lin["y"] = float(lin.get("y", 0.0)) + speed * sin(yaw) * t
+	pose["linear"] = lin
+	return pose
 
 func apply_pose(robot: String, pos_pdu: Dictionary) -> void:
 	TransformConverter.apply_base_pose(ships[robot], Transform3D(FLU_TO_GODOT, Vector3.ZERO), pos_pdu, COORDINATE_SYSTEM)

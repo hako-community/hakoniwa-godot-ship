@@ -2,11 +2,13 @@
 """PDU 同期統合テスト用の船隊パブリッシャ（箱庭アセット）。
 
 expected.json の既知値を、ビューアと同じ PDU 定義（config/comm/pdu_def.json）で
-OwnShip（pos / joint_states / maritime_disturbance）と他船（pos）へ 20 ms ごとに書き込む。
+OwnShip（pos / joint_states / maritime_disturbance / radar_points）と他船（pos）へ 20 ms ごとに書き込む。
+_motion に速度（ENU [m/s]）がある船は pos.linear を「初期値 + 速度 × 経過時間」で等速直進させる（SHP-23 Step 4）。
 
 usage: python publish_fleet.py <pdu_def.json> <expected.json>
 """
 import json
+import struct
 import sys
 
 import hakopy
@@ -19,12 +21,16 @@ from hakoniwa_pdu.pdu_msgs.hako_msgs.pdu_pytype_Disturbance import Disturbance
 from hakoniwa_pdu.pdu_msgs.hako_msgs.pdu_pytype_DisturbanceUserCustom import DisturbanceUserCustom
 from hakoniwa_pdu.pdu_msgs.sensor_msgs.pdu_conv_JointState import py_to_pdu_JointState
 from hakoniwa_pdu.pdu_msgs.sensor_msgs.pdu_pytype_JointState import JointState
+from hakoniwa_pdu.pdu_msgs.sensor_msgs.pdu_conv_PointCloud2 import py_to_pdu_PointCloud2
+from hakoniwa_pdu.pdu_msgs.sensor_msgs.pdu_pytype_PointCloud2 import PointCloud2
+from hakoniwa_pdu.pdu_msgs.sensor_msgs.pdu_pytype_PointField import PointField
 
 ASSET_NAME = "ShipFleetPublisher"
 DELTA_USEC = 20000
 
 _pdu_manager = None
-_frames = []  # (robot, pdu_name, raw_bytes)
+_frames = []  # (robot, pdu_name, raw_bytes)  … 毎ステップ同じ値
+_movers = []  # (robot, pos dict, [ve, vn])     … 毎ステップ位置を更新
 
 
 def _twist(pose: dict) -> Twist:
@@ -61,28 +67,57 @@ def _disturbance(wave: dict) -> Disturbance:
     return d
 
 
+def _radar_cloud(points: list) -> PointCloud2:
+    """ADR D16 の radar_points 契約: x/y/z/intensity（FLOAT32, LE）、自船ヘディングアップ水平座標、intensity = RCS [m^2]。"""
+    msg = PointCloud2()
+    msg.fields = []
+    for i, name in enumerate(("x", "y", "z", "intensity")):
+        f = PointField()
+        f.name, f.offset, f.datatype, f.count = name, 4 * i, 7, 1
+        msg.fields.append(f)
+    msg.height, msg.width = 1, len(points)
+    msg.point_step = 16
+    msg.row_step = 16 * len(points)
+    msg.data = list(b"".join(struct.pack("<4f", *p) for p in points))
+    msg.is_dense = True
+    return msg
+
+
+def moved_pose(pose: dict, vel: list, t: float) -> dict:
+    lin = pose["linear"]
+    return {"linear": {"x": lin["x"] + vel[0] * t, "y": lin["y"] + vel[1] * t, "z": lin["z"]}, "angular": pose["angular"]}
+
+
 def build_frames(expected: dict) -> list:
     frames = []
+    motion = expected.get("_motion", {})
     for robot, data in expected.items():
         if robot.startswith("_"):
             continue
-        frames.append((robot, "pos", py_to_pdu_Twist(_twist(data["pos"]))))
+        if robot in motion:
+            _movers.append((robot, data["pos"], motion[robot]))
+        else:
+            frames.append((robot, "pos", py_to_pdu_Twist(_twist(data["pos"]))))
         if "joint_states" in data:
             frames.append((robot, "joint_states", py_to_pdu_JointState(_joint_state(data["joint_states"]))))
     if "_wave" in expected:
         frames.append(("OwnShip", "maritime_disturbance", py_to_pdu_Disturbance(_disturbance(expected["_wave"]))))
+    if "_radar" in expected:
+        frames.append(("OwnShip", "radar_points", py_to_pdu_PointCloud2(_radar_cloud(expected["_radar"]))))
     return frames
 
 
 def on_manual_timing_control(_context):
     step = 0
     while True:
-        for robot, pdu_name, raw in _frames:
+        t = step * DELTA_USEC / 1.0e6
+        moving = [(robot, "pos", py_to_pdu_Twist(_twist(moved_pose(pose, vel, t)))) for robot, pose, vel in _movers]
+        for robot, pdu_name, raw in _frames + moving:
             if not _pdu_manager.flush_pdu_raw_data_nowait(robot, pdu_name, raw):
                 print(f"SHIP_FLEET_PUB_WRITE_FAILED:{robot}/{pdu_name}", flush=True)
                 return 0
         if step == 0:
-            print(f"SHIP_FLEET_PUB_FIRST_WRITE:{len(_frames)} pdus", flush=True)
+            print(f"SHIP_FLEET_PUB_FIRST_WRITE:{len(_frames) + len(moving)} pdus", flush=True)
         step += 1
         if not hakopy.usleep(DELTA_USEC):
             break

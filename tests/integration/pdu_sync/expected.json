@@ -1,5 +1,5 @@
 {
-  "_comment": "publish_fleet.py が書き込み、ship_viewer_session.gd (--sync-test) が検証する既知値。pos.angular は hakoniwa-mujoco-runtime 規約（roll, asin(R20) = -pitch, yaw）[rad]。_wave は OwnShip/maritime_disturbance（hako_msgs/Disturbance）の d_user_custom[1][4]=水深, d_user_custom[2]=[Hs, Tp, 波向, gamma, seed] として送る",
+  "_comment": "publish_fleet.py が書き込み、ship_viewer_session.gd (--sync-test) が検証する既知値。pos.angular は hakoniwa-mujoco-runtime 規約（roll, asin(R20) = -pitch, yaw）[rad]。_wave は OwnShip/maritime_disturbance（hako_msgs/Disturbance）の d_user_custom[1][4]=水深, d_user_custom[2]=[Hs, Tp, 波向, gamma, seed] として送る。_motion は等速直進する船の速度 ENU [東, 北] [m/s]（pos.linear はその直線上を動く）。_radar は OwnShip/radar_points の点 [x 前, y 左, z 上 [m], RCS [m^2]]（自船ヘディングアップ水平座標）",
   "OwnShip": {
     "pos": {
       "linear": {
@@ -69,5 +69,55 @@
     "gamma": 2.0,
     "seed": 2024,
     "water_depth_m": 35.0
-  }
+  },
+  "_motion": {
+    "OwnShip": [
+      4.330124,
+      2.500005
+    ],
+    "TargetShip01": [
+      -6.0,
+      -4.4e-05
+    ],
+    "TargetShip02": [
+      -1.5e-05,
+      4.0
+    ],
+    "TargetShipFishing": [
+      2.09012,
+      -2.152068
+    ]
+  },
+  "_radar": [
+    [
+      780.0,
+      -150.0,
+      0.0,
+      2000.0
+    ],
+    [
+      500.0,
+      300.0,
+      0.0,
+      300.0
+    ],
+    [
+      140.0,
+      60.0,
+      0.0,
+      5.0
+    ],
+    [
+      300.0,
+      -200.0,
+      1.5,
+      12.5
+    ],
+    [
+      -250.0,
+      40.0,
+      0.0,
+      0.8
+    ]
+  ]
 }

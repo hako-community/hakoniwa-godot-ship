@@ -14,6 +14,38 @@
     "seed": 42,
     "water_depth_m": 100.0
   },
+  "overlays": {
+    "own_ship": "OwnShip",
+    "velocity_window_s": 5.0,
+    "height_above_sea_m": 0.5,
+    "label_height_m": 25.0,
+    "trail": {
+      "sample_interval_s": 1.0,
+      "max_points": 900,
+      "width_px": 2.0
+    },
+    "ais": {
+      "vector_minutes": 6.0,
+      "width_px": 3.0
+    },
+    "ozt": {
+      "safe_domain_m": 926.0,
+      "time_horizon_s": 900.0,
+      "update_interval_s": 0.2,
+      "display_range_m": 3000.0
+    },
+    "radar": {
+      "robot": "OwnShip",
+      "pdu": "radar_points",
+      "rotation_rpm": 24.0,
+      "horizontal_beamwidth_deg": 1.8,
+      "afterglow_deg": 40.0,
+      "display_range_nm": 1.5,
+      "ring_interval_nm": 0.5,
+      "sea_clutter_enabled": true,
+      "stc_range_nm": 3.0
+    }
+  },
   "ships": [
     {
       "robot": "OwnShip",
@@ -31,6 +63,14 @@
           "y": 0.0,
           "z": 0.0
         }
+      },
+      "preview_motion": {
+        "sog_kt": 10.0
+      },
+      "ais": {
+        "has_ais": true,
+        "mmsi": 431000001,
+        "name": "SUZAKU"
       }
     },
     {
@@ -39,8 +79,8 @@
       "pos_pdu": "pos",
       "preview_pose": {
         "linear": {
-          "x": 600.0,
-          "y": 250.0,
+          "x": 3200.0,
+          "y": 150.0,
           "z": 0.0
         },
         "angular": {
@@ -48,6 +88,14 @@
           "y": 0.0,
           "z": 3.14159
         }
+      },
+      "preview_motion": {
+        "sog_kt": 12.0
+      },
+      "ais": {
+        "has_ais": true,
+        "mmsi": 431000002,
+        "name": "GENBU"
       }
     },
     {
@@ -56,8 +104,8 @@
       "pos_pdu": "pos",
       "preview_pose": {
         "linear": {
-          "x": 350.0,
-          "y": -300.0,
+          "x": 2400.0,
+          "y": -2200.0,
           "z": 0.0
         },
         "angular": {
@@ -65,6 +113,14 @@
           "y": 0.0,
           "z": 1.5708
         }
+      },
+      "preview_motion": {
+        "sog_kt": 8.0
+      },
+      "ais": {
+        "has_ais": true,
+        "mmsi": 431000003,
+        "name": "SETO FERRY"
       }
     },
     {
@@ -73,15 +129,21 @@
       "pos_pdu": "pos",
       "preview_pose": {
         "linear": {
-          "x": 200.0,
-          "y": 80.0,
+          "x": 1200.0,
+          "y": 700.0,
           "z": 0.0
         },
         "angular": {
           "x": 0.0,
           "y": 0.0,
-          "z": -0.8
+          "z": -2.4
         }
+      },
+      "preview_motion": {
+        "sog_kt": 5.0
+      },
+      "ais": {
+        "has_ais": false
       }
     }
   ]

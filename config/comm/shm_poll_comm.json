@@ -20,6 +20,10 @@
           {
             "name": "maritime_disturbance",
             "notify_on_recv": false
+          },
+          {
+            "name": "radar_points",
+            "notify_on_recv": false
           }
         ]
       },
