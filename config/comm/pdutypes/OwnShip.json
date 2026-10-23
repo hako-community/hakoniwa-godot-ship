@@ -61,8 +61,14 @@
   },
   {
     "channel_id": 17,
-    "pdu_size": 921600,
-    "name": "camera_rgb",
+    "pdu_size": 1048576,
+    "name": "camera_bow",
+    "type": "sensor_msgs/Image"
+  },
+  {
+    "channel_id": 18,
+    "pdu_size": 1048576,
+    "name": "camera_bridge",
     "type": "sensor_msgs/Image"
   },
   {
