@@ -31,7 +31,7 @@
   },
   {
     "channel_id": 10,
-    "pdu_size": 512,
+    "pdu_size": 1024,
     "name": "gnss_odom",
     "type": "nav_msgs/Odometry"
   },
@@ -87,6 +87,12 @@
     "channel_id": 50,
     "pdu_size": 256,
     "name": "autonomy_status",
+    "type": "std_msgs/String"
+  },
+  {
+    "channel_id": 51,
+    "pdu_size": 256,
+    "name": "foc_command",
     "type": "std_msgs/String"
   }
 ]
