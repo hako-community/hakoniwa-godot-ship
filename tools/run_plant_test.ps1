@@ -1,6 +1,8 @@
 ﻿# run_plant_test.ps1 - 実物理との結合テスト（conductor → ship_plant ＋ 外乱パブリッシャ → Godot ビューア）
 #
 #   pwsh -File tools/run_plant_test.ps1 [-TimeoutSec 240] [-Screenshot <png> [-CameraDistance <m>]]
+#   pwsh -File tools/run_plant_test.ps1 -Watch [-TimeoutSec 900] [-WinPos -2720,630] [-ViewerArgs '--no-overlays --camera-distance=400']
+#     検証せずに見るだけ（窓を閉じると終わる）。-ViewerArgs はビューアの引数（例：オーバレイを消して船に寄る外観の確認）
 #
 # ship_plant（hakoniwa-mujoco-ship、事前に cmake --build build --config Release）が全船の pos・OwnShip の
 # joint_states / radar_points を書き、tools/publish_disturbance.py が同じシナリオの波浪を書く。
@@ -12,7 +14,10 @@ param(
     [int]$TimeoutSec = 240,
     [string]$Screenshot = "",
     [string]$CameraDistance = "",
-    [string]$Scenario = ""
+    [string]$Scenario = "",
+    [switch]$Watch,
+    [string]$WinPos = "",
+    [string]$ViewerArgs = ""
 )
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "godot_env.ps1")
@@ -47,7 +52,13 @@ try {
     Start-Logged "plant" $PLANT @($Scenario, "--trace", (Join-Path $LOG_DIR "plant_trace.csv")) | Out-Null
     Start-Logged "env" $PYTHON @("-u", $ENV_PUB, $PDU_CONFIG, $Scenario) | Out-Null
     Start-Sleep -Seconds 3
-    if ($Screenshot) {
+    if ($Watch) {
+        $viewArgs = @("--path", $PROJECT_ROOT)
+        if ($WinPos) { $viewArgs += @("--position", $WinPos) }
+        $viewArgs += @("--", "--hako-start")
+        if ($ViewerArgs) { $viewArgs += $ViewerArgs.Trim() -split ' +' }
+        $viewer = Start-Logged "viewer" $GODOT_GUI $viewArgs
+    } elseif ($Screenshot) {
         $viewArgs = @("--path", $PROJECT_ROOT, "--", "--plant-test", "--screenshot=$Screenshot")
         if ($CameraDistance) { $viewArgs += "--camera-distance=$CameraDistance" }
         $viewer = Start-Logged "viewer" $GODOT_CONSOLE $viewArgs
