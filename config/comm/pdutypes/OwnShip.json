@@ -48,6 +48,12 @@
     "type": "sensor_msgs/PointCloud2"
   },
   {
+    "channel_id": 13,
+    "pdu_size": 1024,
+    "name": "nav_state",
+    "type": "nav_msgs/Odometry"
+  },
+  {
     "channel_id": 15,
     "pdu_size": 65536,
     "name": "radar_points",
