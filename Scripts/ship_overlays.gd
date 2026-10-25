@@ -262,6 +262,7 @@ func _add_layer(layer_name: String) -> void:
 	mat.vertex_color_use_as_albedo = true
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.no_depth_test = true
+	mat.disable_fog = true   # 霧（デモ③）でもオーバレイは見える
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.render_priority = _layers.size()
 	inst.material_override = mat

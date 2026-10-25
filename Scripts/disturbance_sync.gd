@@ -19,6 +19,8 @@ var clock_pdu: String = ""
 var last_params: Dictionary = {}
 ## 直近のステップで海面に使った物理時刻 [s]（0: 箱庭時刻を使った）
 var physics_stamp_sec := 0.0
+## 視程 [m]（d_user_custom[0].data[1]、霧の表示用。未受信は −1）
+var visibility_m := -1.0
 
 var _endpoint = null
 var _typed_endpoint = null
@@ -44,7 +46,11 @@ func _on_simulation_step(simtime_usec: int, _world_time_usec: int) -> void:
 	if _typed_endpoint == null:
 		return
 	_endpoint.process_recv_events()
-	var params := parse_wave_params(_typed_endpoint.recv_dict())
+	var disturbance: Dictionary = _typed_endpoint.recv_dict()
+	var customs: Array = disturbance.get("d_user_custom", [])
+	if customs.size() >= 1 and customs[0].get("data", []).size() >= 2:
+		visibility_m = float(customs[0]["data"][1])
+	var params := parse_wave_params(disturbance)
 	if not params.is_empty() and params != last_params:
 		last_params = params
 		ocean.set_wave_params(params)

@@ -96,6 +96,18 @@
     "type": "hako_msgs/Disturbance"
   },
   {
+    "channel_id": 32,
+    "pdu_size": 2048,
+    "name": "sensor_status",
+    "type": "std_msgs/Float64MultiArray"
+  },
+  {
+    "channel_id": 33,
+    "pdu_size": 2048,
+    "name": "sut_sensor_use",
+    "type": "std_msgs/Float64MultiArray"
+  },
+  {
     "channel_id": 50,
     "pdu_size": 256,
     "name": "autonomy_status",

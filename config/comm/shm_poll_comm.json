@@ -28,6 +28,34 @@
           {
             "name": "radar_points",
             "notify_on_recv": false
+          },
+          {
+            "name": "sensor_status",
+            "notify_on_recv": false
+          },
+          {
+            "name": "sut_sensor_use",
+            "notify_on_recv": false
+          },
+          {
+            "name": "autonomy_status",
+            "notify_on_recv": false
+          },
+          {
+            "name": "foc_command",
+            "notify_on_recv": false
+          },
+          {
+            "name": "gnss_odom",
+            "notify_on_recv": false
+          },
+          {
+            "name": "ais_stream",
+            "notify_on_recv": false
+          },
+          {
+            "name": "traffic",
+            "notify_on_recv": false
           }
         ]
       },

@@ -14,6 +14,10 @@ extends Node
 ##                        --plant-test と併用すると結合検証の終了時の画面を保存
 ##   --smoke-frames=<n>   --smoke の検証を行うフレーム（既定 10。航跡などを見たいときに増やす）
 ##   --no-overlays        工学オーバレイを表示しない（計算・検証は行う。船の外観の確認用）
+##   --scenario=<path>    デモのシナリオ JSON。SUT の航路・岸壁を描く（SHP-31、Scripts/scenario_view.gd）
+##   --run-dir=<path>     実行の結果の置き場。海域の航路（traffic/area_enu.json）を描く
+##   --no-panel           センサ・通信の状態の画面を出さない
+##   --shots=<t1,t2,...>  箱庭時刻 t [s] を過ぎたら画面を <run-dir>/godot_<t>.png に保存（ウィンドウ実行時のみ、目視確認用）
 
 const SMOKE_FRAMES := 10
 const SYNC_TEST_TIMEOUT_SEC := 30.0
@@ -30,6 +34,10 @@ const DisturbanceSync = preload("res://Scripts/disturbance_sync.gd")
 const RadarEchoSync = preload("res://Scripts/radar_echo_sync.gd")
 const CpaOzt = preload("res://Scripts/cpa_ozt.gd")
 const PlantCouplingCheck = preload("res://Scripts/plant_coupling_check.gd")
+const MonitorSync = preload("res://Scripts/monitor_sync.gd")
+const TrafficView = preload("res://Scripts/traffic_view.gd")
+const ScenarioView = preload("res://Scripts/scenario_view.gd")
+const SensorPanel = preload("res://Scripts/sensor_panel.gd")
 const PLANT_TEST_TIMEOUT_SEC := 240.0
 
 @export var fleet_path: NodePath = ^"../Ships"
@@ -38,6 +46,8 @@ const PLANT_TEST_TIMEOUT_SEC := 240.0
 @export var sun_path: NodePath = ^"../Sun"
 @export var ocean_path: NodePath = ^"../Ocean"
 @export var overlays_path: NodePath = ^"../Overlays"
+@export var hud_path: NodePath = ^"../Hud"
+@export var environment_path: NodePath = ^"../WorldEnvironment"
 
 var status_text: String = "offline"
 
@@ -51,6 +61,8 @@ var _frames := 0
 var _sync_elapsed := 0.0
 var _sync_expected: Dictionary = {}
 var _sync_steps := 0
+var _scenario_view: Node3D
+var _shots: Array = []
 
 func _ready() -> void:
 	_args = OS.get_cmdline_user_args()
@@ -67,7 +79,11 @@ func _ready() -> void:
 	if _has("--no-overlays"):
 		_overlays.visible = false
 	get_node(camera_path).target = _fleet.ships.get(_overlays.own_robot)
+	_build_scenario_view()
 
+	for v in _arg_value("--shots=").split(",", false):
+		_shots.append(float(v))
+	_shots.sort()
 	if _has("--hako") or _has("--hako-start") or _has("--sync-test") or _has("--plant-test"):
 		_start_hakoniwa()
 	else:
@@ -83,6 +99,8 @@ func _physics_process(delta: float) -> void:
 		_ocean.set_time(_offline_time)
 		_fleet.apply_preview_poses(_offline_time)
 		_overlays.update(_offline_time)
+	if not _shots.is_empty() and _sim.get_simtime_usec() / 1.0e6 >= float(_shots[0]):
+		_save_shot(float(_shots.pop_front()))
 	if _has("--smoke") and _frames == _smoke_frames():
 		_run_smoke_checks()
 	if _has("--plant-test"):
@@ -121,6 +139,7 @@ func _start_hakoniwa() -> void:
 		radar_sync.robot_name = str(radar["robot"])
 		radar_sync.pdu_name = str(radar["pdu"])
 		add_child(radar_sync)
+	_attach_monitor()
 	_sim.simulation_step.connect(func(_s, _w): _sync_steps += 1)
 	# 姿勢同期・レーダ受信の後に接続するので、同じステップで受信した値でオーバレイを更新する
 	_sim.simulation_step.connect(func(simtime_usec, _w): _overlays.update(simtime_usec / 1.0e6))
@@ -152,6 +171,71 @@ func _start_hakoniwa() -> void:
 		_sync_expected = _fleet._load_json(SYNC_EXPECTED_PATH)
 		if _sync_expected.is_empty():
 			_fail("HAKONIWA_GODOT_SHIP_SYNC_FAILED", "expected values not found: %s" % SYNC_EXPECTED_PATH)
+
+## シナリオに合わせた表示（航路・岸壁・海域の航路・GNSS・霧）。オフラインでも航路・岸壁は描く
+func _build_scenario_view() -> void:
+	var view := ScenarioView.new()
+	_scenario_view = view
+	view.name = "ScenarioView"
+	view.fleet = _fleet
+	view.own_robot = _overlays.own_robot
+	var env_node := get_node_or_null(environment_path) as WorldEnvironment
+	if env_node != null:
+		view.environment = env_node.environment
+	get_parent().add_child.call_deferred(view)
+	view.setup(_arg_value("--scenario="), _arg_value("--run-dir="))
+
+## センサ・通信の状態（SHP-31）：監視の PDU・交通の船・状態の画面
+func _attach_monitor() -> void:
+	var cfg: Dictionary = _fleet.fleet.get("monitor", {})
+	if cfg.is_empty():
+		return
+	var monitor := MonitorSync.new()
+	monitor.name = "MonitorSync"
+	monitor.sim = _sim
+	monitor.robot_name = str(cfg.get("robot", "OwnShip"))
+	for key in cfg.keys():
+		if key != "robot":
+			monitor.pdus[key] = str(cfg[key])
+	add_child(monitor)
+	var dist_sync := get_node_or_null("DisturbanceSync")
+	var traffic := TrafficView.new()
+	traffic.name = "Traffic"
+	traffic.monitor = monitor
+	if dist_sync != null:
+		traffic.clock = func() -> float: return dist_sync.physics_stamp_sec if dist_sync.physics_stamp_sec > 0.0 else monitor.sim_time
+	get_parent().add_child.call_deferred(traffic)
+	_scenario_view.monitor = monitor
+	_scenario_view.dist_sync = dist_sync
+	if not _has("--no-panel"):
+		var panel := SensorPanel.new()
+		panel.name = "SensorPanel"
+		panel.monitor = monitor
+		# 右上に固定（幅は内容に合わせて左へ伸びる）
+		panel.anchor_left = 1.0
+		panel.anchor_right = 1.0
+		panel.offset_left = -610.0
+		panel.offset_right = -10.0
+		panel.offset_top = 40.0
+		panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		get_node(hud_path).add_child.call_deferred(panel)
+
+func _save_shot(t: float) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var dir := _arg_value("--run-dir=")
+	var path := (dir if not dir.is_empty() else OS.get_user_data_dir()).path_join("godot_%04d.png" % int(t))
+	get_viewport().get_texture().get_image().save_png(path)
+	print("HAKONIWA_GODOT_SHIP_SCREENSHOT %s" % path)
+	var monitor := get_node_or_null("MonitorSync")
+	if monitor != null:
+		# 画面と同じ時刻の受信値（検証用）
+		var f := FileAccess.open(path.get_basename() + ".json", FileAccess.WRITE)
+		if f != null:
+			var traffic := get_parent().get_node_or_null("Traffic")
+			f.store_string(JSON.stringify({"sim_time": monitor.sim_time, "plant_stamp": monitor.plant_stamp, "plant": monitor.plant_rows,
+				"sut_stamp": monitor.sut_stamp, "sut": monitor.sut_rows, "autonomy": monitor.autonomy, "foc": monitor.foc,
+				"gnss": monitor.gnss_fix, "traffic": monitor.traffic.size(), "traffic_models": traffic.model_info() if traffic != null else {}}, "  "))
 
 func _run_smoke_checks() -> void:
 	var problems := PackedStringArray()

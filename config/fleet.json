@@ -10,6 +10,16 @@
     "robot": "OwnShip",
     "pdu": "joint_states"
   },
+  "monitor": {
+    "robot": "OwnShip",
+    "sensor_status": "sensor_status",
+    "sut_sensor_use": "sut_sensor_use",
+    "autonomy_status": "autonomy_status",
+    "foc_command": "foc_command",
+    "gnss": "gnss_odom",
+    "ais": "ais_stream",
+    "traffic": "traffic"
+  },
   "preview_wave": {
     "hs_m": 2.5,
     "tp_s": 8.0,
