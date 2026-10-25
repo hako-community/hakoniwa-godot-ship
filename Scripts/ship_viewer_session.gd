@@ -172,6 +172,8 @@ func _start_hakoniwa() -> void:
 		driver.camera = get_node(camera_path)
 		driver.hud = get_node(hud_path)
 		driver.sweep = _overlays.get_node_or_null("Sweep")
+		driver.overlays = _overlays
+		driver.scenario_view = _scenario_view
 		var why: String = driver.setup(movie)
 		if not why.is_empty():
 			_fail("HAKONIWA_GODOT_SHIP_MOVIE_FAILED", why)
@@ -261,7 +263,11 @@ func _run_smoke_checks() -> void:
 	for missing in _fleet.find_missing_joint_nodes():
 		problems.append("joint node not found: %s" % missing)
 	# シーン向き: カメラ・太陽光とも下向き（.tscn の Transform3D は行優先表記のため取り違えやすい）
-	for path in [camera_path, sun_path]:
+	var cam = get_node(camera_path)
+	var check_paths := [sun_path]
+	if cam.mode == cam.Mode.OBLIQUE or cam.mode == cam.Mode.TOP:
+		check_paths.append(camera_path)   # 船の視点（追跡・船橋）は水平を見る
+	for path in check_paths:
 		var forward := -(get_node(path) as Node3D).global_basis.z
 		if forward.y >= 0.0:
 			problems.append("%s faces upward: forward=%s" % [path, forward])

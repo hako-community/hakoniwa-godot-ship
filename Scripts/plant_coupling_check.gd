@@ -50,6 +50,9 @@ var _vel_err_max := 0.0
 var _vel_samples := 0
 var _problems := PackedStringArray()
 var _done := false
+var _prev_heading := NAN
+var _prev_heading_t := 0.0
+var _yaw_rate_dps := 0.0
 
 func _ready() -> void:
 	expected = fleet._load_json(EXPECTED_PATH)
@@ -86,6 +89,7 @@ func _on_simulation_step(simtime_usec: int, _world_time_usec: int) -> void:
 	_t = simtime_usec / 1.0e6
 	var physics_t := _check_joint_states()
 	_check_clock()
+	_track_yaw_rate()
 	_check_radar(physics_t)
 	var settle := float(expected["settle_s"])
 	if _t > settle:
@@ -153,6 +157,14 @@ func _check_clock() -> void:
 		_clock_from_physics += 1
 
 ## 新しい点群を受信したステップで、物標と他船の位置・RCS を照合する
+## 自船の回頭の速さ [deg/s]（表示中の船首方位の差分。診断の表示用）
+func _track_yaw_rate() -> void:
+	var h := float(overlays.tracks[_own]["heading_deg"])
+	if not is_nan(_prev_heading) and _t > _prev_heading_t:
+		_yaw_rate_dps = wrapf(h - _prev_heading, -180.0, 180.0) / (_t - _prev_heading_t)
+	_prev_heading = h
+	_prev_heading_t = _t
+
 func _check_radar(physics_t: float) -> void:
 	if radar_sync == null or radar_sync.clouds_received == _last_clouds:
 		return
@@ -173,15 +185,24 @@ func _check_radar(physics_t: float) -> void:
 		var expect := Vector2(tr["pos"][0], tr["pos"][1]) + shift
 		var best := INF
 		var best_i := -1
+		var best_vec := Vector2.ZERO
 		for i in overlays.radar_echoes_enu.size():
 			var e: Array = overlays.radar_echoes_enu[i]
 			var d := Vector2(e[0], e[1]).distance_to(expect)
 			if d < best and absf(float(e[2]) - float(cfg["rcs_m2"])) <= 1.0e-3 * float(cfg["rcs_m2"]):
 				best = d
 				best_i = i
+				best_vec = Vector2(e[0], e[1]) - expect
 		var visible := bool(cfg["radar_visible"])
 		if visible and best > tol:
-			_add_problem("radar: %s not detected (nearest echo with its RCS %.2f m away, scan age %.2f s)" % [robot, best, delta])
+			# ずれを自船から見た半径方向（距離）と接線方向（向き）に分ける。接線方向が距離に比例すれば向き（回頭）のずれ
+			var own_p: Array = overlays.tracks[_own]["pos"]
+			var radial := (expect - Vector2(own_p[0], own_p[1]))
+			var rng := radial.length()
+			radial = radial / maxf(rng, 1e-6)
+			var tang := Vector2(-radial.y, radial.x)
+			_add_problem("radar: %s not detected (nearest echo with its RCS %.2f m away, scan age %.2f s; range %.0f m, radial %+.2f m, tangential %+.2f m = %+.4f deg; own yaw rate %+.3f deg/s)" % [
+				robot, best, delta, rng, best_vec.dot(radial), best_vec.dot(tang), rad_to_deg(best_vec.dot(tang) / maxf(rng, 1.0)), _yaw_rate_dps])
 		elif not visible and best <= tol:
 			_add_problem("radar: %s must be hidden (%s) but echo at %.2f m" % [robot, cfg.get("_why", ""), best])
 		if best_i >= 0 and best <= tol:

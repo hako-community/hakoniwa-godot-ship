@@ -6,7 +6,9 @@ extends Node
 ## user arg `--movie=<schedule.json>`（シミュレーションの時刻で書く）:
 ##   {"fps": 25, "end_s": 900,
 ##    "speed": [[0, 4], [300, 1]],                       … その時刻からの速さ（整数倍。1 コマ = fps と delta の整数の歩）
-##    "views": [[0, {"distance": 2600, "elevation": 60, "azimuth": 0, "top": false}], …]  … 3 s かけて移る
+##    "views": [[0, {"mode": "oblique", "distance": 2600, "elevation": 60, "azimuth": 0, "overlays": true}], …]
+##              … mode は oblique（俯瞰）・top（真上）・chase（追跡）・bridge（船橋）。俯瞰どうしは 3 s かけて移り、視点が変わると切り替える。
+##                overlays：工学オーバレイ（レーダの輪・危険な針路の扇など）を出すか（既定は俯瞰で出し、船の視点で出さない）
 ##    "captions": [[t0, t1, "テロップ"], …]}
 ## シミュレーションノード（hakoniwa_simulation_node.gd）の自動の進行は止め、ここから _tick_internal を呼ぶ（アドオンは無改変）。
 
@@ -18,6 +20,9 @@ var camera: Camera3D = null
 var hud: CanvasLayer = null
 ## レーダの掃引の層（速さ 2 倍を超えると 1 秒に何回転もしてちらついて見えるので隠す）
 var sweep: Node3D = null
+## 工学オーバレイ（船の視点では既定で隠す）と、シナリオの工学用の線（scenario_view.gd）
+var overlays: Node3D = null
+var scenario_view: Node = null
 var schedule: Dictionary = {}
 
 var _fps := 25.0
@@ -92,7 +97,7 @@ func _process(_delta: float) -> void:
 		return
 	t = sim.get_simtime_usec() / 1.0e6
 	if sweep != null:
-		sweep.visible = _speed_at(t) <= 2.0
+		sweep.visible = _speed_at(t) <= 2.0 and (overlays == null or overlays.visible)
 	_update_view(t)
 	_update_caption(t)
 
@@ -126,12 +131,27 @@ func _update_view(t: float) -> void:
 		return
 	if idx != _view_index:
 		_view_index = idx
+		var was_overview: bool = camera.mode == camera.Mode.OBLIQUE or camera.mode == camera.Mode.TOP
 		_view_from = _current_view()
 		_view_to = views[idx][1]
-		_view_t0 = t if idx > 0 else -INF
+		# 船の視点から俯瞰へ戻るときは移らずに切り替える
+		_view_t0 = t if idx > 0 and was_overview else -INF
+	var mode_name := str(_view_to.get("mode", "top" if bool(_view_to.get("top", false)) else "oblique"))
+	var modes := {"oblique": camera.Mode.OBLIQUE, "top": camera.Mode.TOP, "chase": camera.Mode.CHASE, "bridge": camera.Mode.BRIDGE}
+	camera.mode = modes.get(mode_name, camera.Mode.OBLIQUE)
+	var ship_view := mode_name == "chase" or mode_name == "bridge"
+	var eng := bool(_view_to.get("overlays", not ship_view))
+	if overlays != null:
+		overlays.visible = eng
+	if scenario_view != null:
+		scenario_view.set_engineering_visible(eng)
+	var targets := hud.get_node_or_null("Targets")
+	if targets != null:
+		targets.visible = eng   # 左上の CPA の一覧（工学の表示）
+	if ship_view:
+		return
 	var a := clampf((t - _view_t0) / TRANSITION_S, 0.0, 1.0)
 	a = a * a * (3.0 - 2.0 * a)
-	camera.mode = camera.Mode.TOP if bool(_view_to.get("top", false)) else camera.Mode.OBLIQUE
 	for key in ["distance", "elevation", "azimuth"]:
 		if _view_to.has(key):
 			var v := lerpf(float(_view_from.get(key, _view_to[key])), float(_view_to[key]), a)

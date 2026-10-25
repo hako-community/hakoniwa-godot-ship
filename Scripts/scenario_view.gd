@@ -75,8 +75,21 @@ func setup(scenario_path: String, run_dir: String) -> void:
 	if scenario.has("quay"):
 		_build_quay(scenario["quay"])
 
+## 工学用の線・印（航路・視程の円・GNSS・通信の線・LiDAR の点・カメラの方位）を出すか。岸壁・霧はいつも出す（船の視点で隠す）
+func set_engineering_visible(on: bool) -> void:
+	for n in [_lines, _gnss, _vis, _comm, _lidar, _camera, _gnss_label, _vis_label]:
+		if n != null:
+			n.visible = on
+	for l in _comm_labels:
+		l.visible = on and l.visible
+	_engineering = on
+
+var _engineering := true
+
 func _process(_delta: float) -> void:
 	_update_fog()
+	if not _engineering:
+		return
 	_update_gnss()
 	_update_comm()
 	_update_lidar()

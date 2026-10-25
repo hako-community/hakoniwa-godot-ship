@@ -1,7 +1,7 @@
 ﻿# run_plant_test.ps1 - 実物理との結合テスト（conductor → ship_plant ＋ 外乱パブリッシャ → Godot ビューア）
 #
 #   pwsh -File tools/run_plant_test.ps1 [-TimeoutSec 240] [-Screenshot <png> [-CameraDistance <m>]]
-#   pwsh -File tools/run_plant_test.ps1 -Watch [-TimeoutSec 900] [-WinPos -2720,630] [-ViewerArgs '--no-overlays --camera-distance=400']
+#   pwsh -File tools/run_plant_test.ps1 -Watch [-TimeoutSec 900] [-WinPos 960,500] [-ViewerArgs '--no-overlays --camera-distance=400']
 #     検証せずに見るだけ（窓を閉じると終わる）。-ViewerArgs はビューアの引数（例：オーバレイを消して船に寄る外観の確認）
 #
 # ship_plant（hakoniwa-mujoco-ship、事前に cmake --build build --config Release）が全船の pos・OwnShip の
