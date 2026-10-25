@@ -7,7 +7,10 @@ extends Node
 ##   2. 海面と船体: 各船の上下位置と、ビューアが描いている海面（wave_spectrum.gd、船体水線面の平均）の相関。
 ##      船体の応答遅れ（0〜1.5 s）内で相関が高く、Tp/2 ずらした海面（時刻の取り違え）とは相関しないこと
 ##   3. レーダ: 新しい点群を受信したステップで、物標が他船の位置（RCS 一致）に重なり、波浪遮蔽の船は出ないこと。
-##      物標は走査時刻の相対位置を現在の自船位置に置くので、走査からの経過 Δ の相対移動 (v_own − v_tgt)·Δ を補正する
+##      物標は走査時刻の相対位置を現在の自船位置に置くので、走査からの経過 Δ の相対移動 (v_own − v_tgt)·Δ を補正する。
+##      pos（時刻印なし）と joint_states（時刻印つき）は別々に読むので、表示中の自船の向きは走査の時刻と最大 1 ステップずれる。
+##      許容に、その間の回頭による接線方向のずれ（距離 × 自船の回頭の速さ × 1 ステップ）を足す（K15：SHP-29 の転舵速度の後、
+##      波浪中の回頭が 0.4°/s 程度になり、3 km 先で 0.5 m を超えた）
 ##   4. 関節: レーダアンテナ角が 24 rpm × 物理時刻、舵角が針路保持の制限内、Godot のノードに反映
 ##   5. 運動: 姿勢列から推定した自船の対地速度が、物理の vel（船体固定系）と一致
 ## を検証して HAKONIWA_GODOT_SHIP_PLANT_OK で終了する。他船の速力・針路は参考表示（波浪中の操縦性能は物理側の
@@ -186,6 +189,8 @@ func _check_radar(physics_t: float) -> void:
 		var best := INF
 		var best_i := -1
 		var best_vec := Vector2.ZERO
+		var own_now: Array = overlays.tracks[_own]["pos"]
+		var tol_i := tol + expect.distance_to(Vector2(own_now[0], own_now[1])) * deg_to_rad(absf(_yaw_rate_dps)) * STEP_SEC
 		for i in overlays.radar_echoes_enu.size():
 			var e: Array = overlays.radar_echoes_enu[i]
 			var d := Vector2(e[0], e[1]).distance_to(expect)
@@ -194,7 +199,7 @@ func _check_radar(physics_t: float) -> void:
 				best_i = i
 				best_vec = Vector2(e[0], e[1]) - expect
 		var visible := bool(cfg["radar_visible"])
-		if visible and best > tol:
+		if visible and best > tol_i:
 			# ずれを自船から見た半径方向（距離）と接線方向（向き）に分ける。接線方向が距離に比例すれば向き（回頭）のずれ
 			var own_p: Array = overlays.tracks[_own]["pos"]
 			var radial := (expect - Vector2(own_p[0], own_p[1]))
@@ -203,9 +208,9 @@ func _check_radar(physics_t: float) -> void:
 			var tang := Vector2(-radial.y, radial.x)
 			_add_problem("radar: %s not detected (nearest echo with its RCS %.2f m away, scan age %.2f s; range %.0f m, radial %+.2f m, tangential %+.2f m = %+.4f deg; own yaw rate %+.3f deg/s)" % [
 				robot, best, delta, rng, best_vec.dot(radial), best_vec.dot(tang), rad_to_deg(best_vec.dot(tang) / maxf(rng, 1.0)), _yaw_rate_dps])
-		elif not visible and best <= tol:
+		elif not visible and best <= tol_i:
 			_add_problem("radar: %s must be hidden (%s) but echo at %.2f m" % [robot, cfg.get("_why", ""), best])
-		if best_i >= 0 and best <= tol:
+		if best_i >= 0 and best <= tol_i:
 			used[best_i] = true
 			_radar_max_err = maxf(_radar_max_err, best)
 	# 物標以外はシークラッタ（RCS 小・クラッタ範囲内）
