@@ -17,6 +17,8 @@ enum Mode { OBLIQUE, TOP }
 @export var max_distance_m: float = 12000.0
 ## oblique の見下ろし角 [deg]（既定は従来の (0.45, 0.9) × 距離 と同じ向き）
 @export var elevation_deg: float = 63.435
+## oblique のカメラの方位 [deg]（0：南から北を見る、90：西から東を見る。録画の予定 movie_driver.gd が変える）
+@export var azimuth_deg: float = 0.0
 
 var target: Node3D = null
 
@@ -62,5 +64,6 @@ func _process(_delta: float) -> void:
 		projection = PROJECTION_PERSPECTIVE
 		var r := distance_m * 1.00623  # 既定の見下ろし角で従来の (0.45, 0.9) × 距離と一致
 		var el := deg_to_rad(elevation_deg)
-		global_position = center + Vector3(r * cos(el), r * sin(el), 0.0)
+		var az := deg_to_rad(azimuth_deg)
+		global_position = center + Vector3(r * cos(el) * cos(az), r * sin(el), r * cos(el) * sin(az))
 		look_at(center, Vector3.UP)

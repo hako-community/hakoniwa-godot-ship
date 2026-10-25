@@ -17,6 +17,8 @@ extends Node
 ##   --scenario=<path>    デモのシナリオ JSON。SUT の航路・岸壁を描く（SHP-31、Scripts/scenario_view.gd）
 ##   --run-dir=<path>     実行の結果の置き場。海域の航路（traffic/area_enu.json）を描く
 ##   --no-panel           センサ・通信の状態の画面を出さない
+##   --movie=<schedule.json>  録画モード（SHP-35、Scripts/movie_driver.gd）。Godot の `--write-movie <file> --fixed-fps <fps>` と併用し、
+##                        1 コマごとにシミュレーションを予定の速さだけ進める（カメラ・テロップも予定どおり）
 ##   --shots=<t1,t2,...>  箱庭時刻 t [s] を過ぎたら画面を <run-dir>/godot_<t>.png に保存（ウィンドウ実行時のみ、目視確認用）
 
 const SMOKE_FRAMES := 10
@@ -38,6 +40,7 @@ const MonitorSync = preload("res://Scripts/monitor_sync.gd")
 const TrafficView = preload("res://Scripts/traffic_view.gd")
 const ScenarioView = preload("res://Scripts/scenario_view.gd")
 const SensorPanel = preload("res://Scripts/sensor_panel.gd")
+const MovieDriver = preload("res://Scripts/movie_driver.gd")
 const PLANT_TEST_TIMEOUT_SEC := 240.0
 
 @export var fleet_path: NodePath = ^"../Ships"
@@ -161,6 +164,19 @@ func _start_hakoniwa() -> void:
 		return
 	status_text = "hakoniwa: initialized (%s)" % _sim.asset_name
 	print("HAKONIWA_GODOT_SHIP_HAKO_INITIALIZED asset=%s" % _sim.asset_name)
+	var movie := _arg_value("--movie=")
+	if not movie.is_empty():
+		var driver := MovieDriver.new()
+		driver.name = "MovieDriver"
+		driver.sim = _sim
+		driver.camera = get_node(camera_path)
+		driver.hud = get_node(hud_path)
+		driver.sweep = _overlays.get_node_or_null("Sweep")
+		var why: String = driver.setup(movie)
+		if not why.is_empty():
+			_fail("HAKONIWA_GODOT_SHIP_MOVIE_FAILED", why)
+			return
+		add_child(driver)
 	if _has("--hako-start") or _has("--sync-test") or _has("--plant-test"):
 		ret = _sim.request_start()
 		if ret != 0:
@@ -211,6 +227,7 @@ func _attach_monitor() -> void:
 		var panel := SensorPanel.new()
 		panel.name = "SensorPanel"
 		panel.monitor = monitor
+		panel.scenario = _scenario_view.scenario
 		# 右上に固定（幅は内容に合わせて左へ伸びる）
 		panel.anchor_left = 1.0
 		panel.anchor_right = 1.0

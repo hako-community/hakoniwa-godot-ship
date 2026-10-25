@@ -18,7 +18,11 @@
     "foc_command": "foc_command",
     "gnss": "gnss_odom",
     "ais": "ais_stream",
-    "traffic": "traffic"
+    "traffic": "traffic",
+    "comm_status": "comm_status",
+    "autonomy_status_shore": "autonomy_status_shore",
+    "lidar": "berthing_lidar",
+    "camera": "camera_detections"
   },
   "preview_wave": {
     "hs_m": 2.5,

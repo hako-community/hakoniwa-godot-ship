@@ -56,6 +56,22 @@
           {
             "name": "traffic",
             "notify_on_recv": false
+          },
+          {
+            "name": "comm_status",
+            "notify_on_recv": false
+          },
+          {
+            "name": "autonomy_status_shore",
+            "notify_on_recv": false
+          },
+          {
+            "name": "berthing_lidar",
+            "notify_on_recv": false
+          },
+          {
+            "name": "camera_detections",
+            "notify_on_recv": false
           }
         ]
       },

@@ -64,6 +64,26 @@ pwsh -File tests/unit/ozt_parity/gen_reference.ps1
 
 > 注: Godot 4.7.1 の `--build-solutions --quit` は headless で終了しないため、ビルドは `--import` ＋ `dotnet build` で行う。
 
+## センサ・通信の状態の画面とデモ（SHP-31〜35）
+
+デモ（hakoniwa-mujoco-ship の `demos/run_ship_demo.ps1 -Viewer godot`）は `--scenario=<シナリオ>`・`--run-dir=<結果の置き場>` を渡す。
+
+- **右上のパネル**（`Scripts/sensor_panel.gd`）：センサ 8 行（レーダ・AIS・GNSS・航法・可視光／赤外線カメラ・離着桟 LiDAR・測深機）ごとに、
+  物理の真値（`sensor_status` ch 32：注入中の異常も）と SUT の使い方（`sut_sensor_use` ch 33：使用中・不採用など）。
+  通信の欄は船の区間・陸の区間の回線、片道の遅延、断、陸に届いた報告（`autonomy_status_shore` ch 53）＝FOC が見ている状態、
+  FOC の指令の送信と到着（`comm_status` ch 52）。実船でも人が担う項目（灯火・形象物・音響信号・無線）も示す。
+- **場面の中**（`Scripts/scenario_view.gd`・`Scripts/traffic_view.gd`）：交通の船（`traffic` ch 14、船長でモデルを縮尺）、SUT の航路、
+  岸壁、海域の航路（`<run-dir>/traffic/area_enu.json`）、GNSS の測位と真の位置、霧と視程の円、通信の線（LTE の基地局と範囲・衛星）、
+  離着桟 LiDAR の点（`berthing_lidar` ch 16）、カメラの検出の方位（`camera_detections` ch 19）。
+- 受信は `Scripts/monitor_sync.gd`（`config/fleet.json` の `monitor`。`tools/gen_viewer_config.py` が購読に加える）。
+- `--shots=<t1,t2,...>`：箱庭時刻 t で画面と受信値（JSON）を `<run-dir>/godot_<t>.png/.json` に保存。
+
+**録画モード**（`Scripts/movie_driver.gd`、`--movie=<予定.json>`）：Godot の Movie Maker（`--write-movie <avi> --fixed-fps 25`）と併用し、
+1 コマごとに箱庭のシミュレーションを予定の速さだけ進める（シミュレーションノードの自動の進行は止め、アドオンは無改変）。
+カメラ（距離・見下ろし角・方位）とテロップも予定どおり。Movie Maker はプロジェクトの画面の大きさで書き出すので、録画の間だけ
+`override.cfg` で 1920×1080 にする（git 管理外）。録画は hakoniwa-mujoco-ship の `video/record_godot.ps1`・`record_godot_all.ps1`、
+まとめは `video/make_godot_movie.py`。
+
 ## 座標系と PDU 規約
 
 | 項目 | 規約 |

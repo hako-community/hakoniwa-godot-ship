@@ -41,6 +41,8 @@ const C_OFF := "8A96A3"
 const C_HEAD := "9CD3FF"
 
 var monitor: Node = null
+## デモのシナリオ（回線の名前を comm ブロックから引く）
+var scenario: Dictionary = {}
 
 var _text: RichTextLabel
 var _next_update := 0.0
@@ -81,15 +83,22 @@ func build_text() -> String:
 		lines.append(_sensor_line(int(s[0]), str(s[1]), t))
 	lines.append("")
 	lines.append("[b][color=#%s]通信（船〜陸上支援センター）[/color][/b]" % C_HEAD)
-	lines.append("  回線　[color=#%s]理想（遅延 0・途切れなし）[/color]　[color=#%s]Starlink・静止衛星・LTE のモデルは P2[/color]" % [C_WARN, C_OFF])
+	if monitor.comm.is_empty() or not scenario.has("comm"):
+		lines.append("  回線　[color=#%s]理想（遅延 0・途切れなし）[/color]　[color=#%s]このデモは通信路のモデル無し（デモ⑥で再現）[/color]" % [C_WARN, C_OFF])
+	else:
+		lines.append_array(_comm_lines(t))
 	# SUT は同じ内容でも 5 Hz で送るので、受信の新しさは SUT の行（sut_sensor_use）の時刻印で見る
 	var sut_alive: bool = monitor.sut_stamp >= 0.0 and t - monitor.sut_stamp <= 2.0
-	lines.append("  SUT → FOC 自動化レベルの報告　%s" % ("[color=#%s]受信中（5 Hz）[/color]" % C_OK if sut_alive and not monitor.autonomy.is_empty() else "[color=#%s]未受信[/color]" % C_OFF))
+	if monitor.comm.is_empty() or not scenario.has("comm"):
+		lines.append("  SUT → FOC 自動化レベルの報告　%s" % ("[color=#%s]受信中（5 Hz）[/color]" % C_OK if sut_alive and not monitor.autonomy.is_empty() else "[color=#%s]未受信[/color]" % C_OFF))
 	var foc_text := "なし"
 	if monitor.foc_count > 0:
 		var f: Dictionary = monitor.foc
 		foc_text = "%s %s（%s）" % [str(f.get("cmd", "?")), _course_speed(f), _age(monitor.foc_time)]
 	lines.append("  FOC → SUT 指令　%s" % foc_text)
+	if not monitor.comm.is_empty() and float(monitor.comm["last_up_delivered"]) > 0.0:
+		var c: Dictionary = monitor.comm
+		lines.append("  　最後の指令：送信 %.1f s → 船に到着 %.1f s（遅れ %.2f s）" % [float(c["last_up_sent"]), float(c["last_up_delivered"]), float(c["last_up_delivered"]) - float(c["last_up_sent"])])
 	lines.append("")
 	lines.append("[b][color=#%s]自動化（SUT）[/color][/b]" % C_HEAD)
 	if monitor.autonomy.is_empty():
@@ -183,14 +192,72 @@ func _value_text(id: int, p: Array, u: Array) -> String:
 				var bad := float(u[3]) > float(u[4])
 				return "[color=#%s]推測航法との差 %.0f m（基準 %.0f m）[/color]" % [C_BAD if bad else "FFFFFF", float(u[3]), float(u[4])]
 			return ""
+		MonitorSync.SENSOR_LIDAR:
+			if p.is_empty() or int(p[0]) == 0:
+				return ""
+			if int(p[3]) == 0:
+				return "[color=#%s]岸壁が範囲外（%.0f m）[/color]" % [C_OFF, float(p[5])]
+			var s := "岸壁 %d 点・最短 %.1f m" % [int(p[3]), float(p[4])]
+			if not u.is_empty() and float(u[4]) > -0.5:
+				s += "・防舷材まで %.2f m・角度 %.1f°" % [float(u[4]), float(u[5])]
+			return s
+		MonitorSync.SENSOR_ECHO:
+			return "船底下 %.1f m" % float(p[3]) if not p.is_empty() and int(p[0]) > 0 else ""
 		MonitorSync.SENSOR_NAV:
 			return "%.1f kn・%03.0f°" % [float(p[3]), float(p[4])] if not p.is_empty() else ""
 		MonitorSync.SENSOR_CAMERA_VIS, MonitorSync.SENSOR_CAMERA_IR:
-			if p.is_empty() or float(p[3]) <= 0.0:
+			if p.is_empty() or int(p[0]) == 0:
 				return ""
-			var vis := float(p[3])
-			return "視程 %.1f km" % (vis / 1000.0) if vis < 9000.0 else ""
+			# p：v0 視程・v1 船長 90 m の船を検出できる距離・v2 検出数・v3 昼（1）／夜（0）
+			var s := "検出 %d・%s" % [int(p[5]), ("届く距離 %.1f km" % (float(p[4]) / 1000.0)) if float(p[4]) > 0.0 else "夜は見えない"]
+			if float(p[3]) < 9000.0:
+				s += "（霧 視程 %.1f km）" % (float(p[3]) / 1000.0)
+			if not u.is_empty() and int(u[0]) > 0:
+				s += "・物標の確認 %d" % int(u[4])
+			return s
 	return ""
+
+## 通信路の行：区間ごとの回線、遅延、健全性、FOC が見ている AL
+func _comm_lines(t: float) -> PackedStringArray:
+	var c: Dictionary = monitor.comm
+	var out := PackedStringArray()
+	var keys := ["ship_links", "shore_links"]
+	for leg in 2:
+		var names: Array = scenario["comm"].get(keys[leg], [])
+		var parts := PackedStringArray()
+		for l in c["links"]:
+			if int(l["leg"]) != leg:
+				continue
+			var name: String = str(names[int(l["index"])].get("name", "?")) if int(l["index"]) < names.size() else "?"
+			var a := float(l["active"])
+			if a >= 1.0:
+				parts.append("[color=#%s][b]%s 使用中[/b][/color]" % [C_OK, name])
+			elif a > 0.0:
+				parts.append("[color=#%s]%s 切替中[/color]" % [C_WARN, name])
+			elif l["available"]:
+				parts.append("%s 待機" % name)
+			else:
+				parts.append("[color=#%s]%s 断・圏外[/color]" % [C_BAD, name])
+		out.append("  %s　%s" % ["船の区間" if leg == 0 else "陸の区間", "・".join(parts)])
+	var state: String
+	if not c["up"]:
+		state = "[color=#%s]断 %.0f s%s[/color]" % [C_BAD, float(c["down_for"]), "（通信途絶と判断）" if not c["healthy"] else ""]
+	elif not c["healthy"]:
+		state = "[color=#%s]遅延過大[/color]" % C_BAD
+	else:
+		state = "[color=#%s]健全[/color]" % C_OK
+	if c["up"]:
+		out.append("  遅延（片道）上り %.0f ms・下り %.0f ms　%s" % [float(c["up_ms"]), float(c["down_ms"]), state])
+	else:
+		out.append("  遅延（片道）—　%s" % state)
+	var lost := int(c["down_dropped"])
+	out.append("  SUT → FOC 報告　陸に届いた最新は %.1f s 前に送ったもの　欠落 %d / %d" % [maxf(t - float(c["last_down_sent"]), 0.0), lost, int(c["down_sent"])])
+	if not monitor.autonomy_shore.is_empty():
+		var a: Dictionary = monitor.autonomy_shore
+		var al := int(a.get("al", -1))
+		var reason: String = REASON_JA.get(str(a.get("reason", "")), "")
+		out.append("  FOC が見ている状態　%s%s" % [AL_JA.get(al, "AL%d" % al), ("（%s）" % reason) if not reason.is_empty() else ""])
+	return out
 
 static func _course_speed(j: Dictionary) -> String:
 	if not j.has("crs"):

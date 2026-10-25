@@ -1,5 +1,7 @@
 extends Node3D
 ## シナリオに合わせた表示（SHP-31）：SUT の航路、岸壁（デモ②）、海域の航路（デモ④⑤）、GNSS の測位と真の位置、霧。
+## 船陸の通信路（SHP-32、comm ブロックのあるデモ⑥）：自船から各回線の相手（低軌道衛星・静止衛星・LTE の基地局）へ線を引き、
+## 使用中は緑、切替中は黄、待機は灰、断・圏外は赤の破線。LTE の届く範囲を円で。衛星の位置は見せるための記号（実際の軌道ではない）
 ##
 ## user args:
 ##   --scenario=<path>  デモのシナリオ JSON（hakoniwa-mujoco-ship demos/）。sut.route・quay を読む
@@ -17,6 +19,11 @@ const GNSS_FAULT_COLOR := Color(1.0, 0.25, 0.2, 0.95)
 const CLEAR_FOG_DENSITY := 5.0e-5
 const FOG_MAX_AT_SHIP := 0.5
 const VIS_COLOR := Color(0.85, 0.9, 1.0, 0.55)
+const LINK_ACTIVE := Color(0.45, 1.0, 0.6, 0.95)
+const LINK_SWITCH := Color(1.0, 0.85, 0.3, 0.95)
+const LINK_IDLE := Color(0.75, 0.8, 0.85, 0.45)
+const LINK_DOWN := Color(1.0, 0.35, 0.3, 0.8)
+const LTE_RANGE_COLOR := Color(0.6, 0.8, 1.0, 0.35)
 
 var scenario: Dictionary = {}
 var monitor: Node = null
@@ -30,6 +37,10 @@ var _gnss: MeshInstance3D
 var _gnss_label: Label3D
 var _vis: MeshInstance3D
 var _vis_label: Label3D
+var _comm: MeshInstance3D
+var _lidar: MeshInstance3D
+var _camera: MeshInstance3D
+var _comm_labels: Array = []
 
 func setup(scenario_path: String, run_dir: String) -> void:
 	if not scenario_path.is_empty() and FileAccess.file_exists(scenario_path):
@@ -40,6 +51,9 @@ func setup(scenario_path: String, run_dir: String) -> void:
 	_gnss = _mesh_instance("GnssFix", 3)
 	_vis = _mesh_instance("Visibility", 2)
 	_vis_label = _label(VIS_COLOR)
+	_comm = _mesh_instance("CommLinks", 4)
+	_lidar = _mesh_instance("BerthingLidar", 5)
+	_camera = _mesh_instance("CameraDetections", 2)
 	_gnss_label = _label(GNSS_COLOR)
 	var mesh: ImmediateMesh = _lines.mesh
 	mesh.clear_surfaces()
@@ -64,6 +78,124 @@ func setup(scenario_path: String, run_dir: String) -> void:
 func _process(_delta: float) -> void:
 	_update_fog()
 	_update_gnss()
+	_update_comm()
+	_update_lidar()
+	_update_camera()
+
+## カメラの検出：自船から検出の方位へ短い線（300 m）と、推定の位置に小さな印（可視光は白、赤外線は橙）。
+## 距離は単眼の推定なので印は目安。交通の多い海域で長い線が画面を埋めないよう、線は方位だけを示す
+func _update_camera() -> void:
+	var mesh: ImmediateMesh = _camera.mesh
+	mesh.clear_surfaces()
+	if monitor == null or monitor.camera_dets.is_empty() or fleet == null or not fleet.ships.has(own_robot):
+		return
+	var root: Node3D = fleet.ships[own_robot]
+	var model: Node3D = root.get_node("Adapter/Model")
+	var fwd := Vector3(-model.global_basis.z.x, 0.0, -model.global_basis.z.z).normalized()
+	var left := Vector3.UP.cross(fwd)
+	var o := Vector3(root.global_position.x, 8.0, root.global_position.z)
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	for d in monitor.camera_dets:
+		var rel := fwd * float(d["x"]) + left * float(d["y"])
+		var dir := rel.normalized()
+		var c := Color(1.0, 0.65, 0.25, 0.8) if int(d["camera"] + 0.5) == 1 else Color(0.95, 0.95, 1.0, 0.8)
+		_line(mesh, o + dir * 60.0, o + dir * minf(300.0, rel.length()), c)
+		var w := o + rel
+		var side := Vector3.UP.cross(dir) * 25.0
+		_line(mesh, w - dir * 25.0, w + side, c)
+		_line(mesh, w + side, w + dir * 25.0, c)
+		_line(mesh, w + dir * 25.0, w - side, c)
+		_line(mesh, w - side, w - dir * 25.0, c)
+	mesh.surface_end()
+
+## 離着桟 LiDAR の点（船体座標 → 自船の今の姿勢で世界へ）と、マウントから岸壁への最短のレイ
+func _update_lidar() -> void:
+	var mesh: ImmediateMesh = _lidar.mesh
+	mesh.clear_surfaces()
+	if monitor == null or monitor.lidar_points.is_empty() or fleet == null or not fleet.ships.has(own_robot):
+		return
+	var root: Node3D = fleet.ships[own_robot]
+	var model: Node3D = root.get_node("Adapter/Model")
+	var fwd := Vector3(-model.global_basis.z.x, 0.0, -model.global_basis.z.z).normalized()
+	var left := Vector3.UP.cross(fwd)
+	var o := root.global_position
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	var colors := [Color(1.0, 0.3, 0.9, 0.9), Color(0.3, 0.9, 1.0, 0.9)]
+	for p in monitor.lidar_points:
+		var w := Vector3(o.x, 2.0, o.z) + fwd * float(p[0]) + left * float(p[1])
+		var c: Color = colors[int(p[3]) % 2]
+		_line(mesh, w - fwd * 0.4, w + fwd * 0.4, c)
+		_line(mesh, w - left * 0.4, w + left * 0.4, c)
+	mesh.surface_end()
+
+## 船陸の通信路の線（船の区間の回線ごと）と LTE の範囲
+func _update_comm() -> void:
+	var mesh: ImmediateMesh = _comm.mesh
+	mesh.clear_surfaces()
+	for l in _comm_labels:
+		l.visible = false
+	if monitor == null or monitor.comm.is_empty() or not scenario.has("comm") or fleet == null or not fleet.ships.has(own_robot):
+		return
+	var defs: Array = scenario["comm"].get("ship_links", [])
+	var own: Vector3 = fleet.ships[own_robot].global_position
+	var o := Vector3(own.x, 25.0, own.z)
+	var t: float = monitor.sim_time
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	var k := 0
+	for row in monitor.comm["links"]:
+		if int(row["leg"]) != 0 or int(row["index"]) >= defs.size():
+			continue
+		var d: Dictionary = defs[int(row["index"])]
+		var end: Vector3
+		match int(row["type"]):
+			0:   # 低軌道：自船の上空を動く記号
+				var a := t * 0.02
+				end = o + Vector3(cos(a) * 700.0, 1300.0, sin(a) * 700.0)
+			1:   # 静止衛星：南の空（北緯 35° で仰角約 48°）。南 = Godot +X
+				end = o + Vector3(1500.0, 1700.0, 0.0)
+			_:   # LTE：基地局
+				var st: Array = d.get("stations", [[0.0, 0.0]])[0]
+				end = Vector3(-float(st[1]), 60.0, -float(st[0]))
+				_line(mesh, Vector3(end.x, 0.0, end.z), end, LINK_IDLE)
+				if float(d.get("range_m", 0.0)) > 0.0:
+					_circle(mesh, Vector3(end.x, 1.0, end.z), float(d["range_m"]), LTE_RANGE_COLOR, true)
+		var a_state := float(row["active"])
+		var color := LINK_ACTIVE if a_state >= 1.0 else (LINK_SWITCH if a_state > 0.0 else (LINK_IDLE if row["available"] else LINK_DOWN))
+		if row["available"] or a_state > 0.0:
+			_line(mesh, o, end, color)
+		else:
+			_dashed_line(mesh, o, end, color, 24)
+		var label := _comm_label(k)
+		label.visible = true
+		label.modulate = color
+		label.position = end + Vector3(0, 30, 0)
+		label.text = "%s %s" % [str(d.get("name", "?")), ("%d ms" % int(row["latency_ms"])) if row["available"] else "断"]
+		k += 1
+	mesh.surface_end()
+
+func _comm_label(i: int) -> Label3D:
+	while _comm_labels.size() <= i:
+		_comm_labels.append(_label(LINK_IDLE))
+	return _comm_labels[i]
+
+static func _line(mesh: ImmediateMesh, a: Vector3, b: Vector3, color: Color) -> void:
+	mesh.surface_set_color(color)
+	mesh.surface_add_vertex(a)
+	mesh.surface_set_color(color)
+	mesh.surface_add_vertex(b)
+
+static func _dashed_line(mesh: ImmediateMesh, a: Vector3, b: Vector3, color: Color, n: int) -> void:
+	for i in range(0, n, 2):
+		_line(mesh, a.lerp(b, float(i) / n), a.lerp(b, float(i + 1) / n), color)
+
+static func _circle(mesh: ImmediateMesh, c: Vector3, r: float, color: Color, dashed: bool) -> void:
+	var n := 128
+	for i in n:
+		if dashed and i % 2 == 1:
+			continue
+		var a0 := TAU * i / n
+		var a1 := TAU * (i + 1) / n
+		_line(mesh, c + Vector3(cos(a0), 0, sin(a0)) * r, c + Vector3(cos(a1), 0, sin(a1)) * r, color)
 
 ## 霧：外乱 PDU の視程から。視程 9 km 未満なら自船中心に視程の円
 func _update_fog() -> void:

@@ -13,3 +13,6 @@ Thumbs.db
 
 # Hakoniwa Godot addons (synced from shipnavi/build/hakoniwa-godot by tools/sync_assets.ps1)
 addons/
+
+# 録画のときだけ置く上書きの設定（hakoniwa-mujoco-ship video/record_godot.ps1、SHP-35）
+override.cfg

@@ -84,6 +84,12 @@
     "type": "sensor_msgs/Image"
   },
   {
+    "channel_id": 19,
+    "pdu_size": 8192,
+    "name": "camera_detections",
+    "type": "sensor_msgs/PointCloud2"
+  },
+  {
     "channel_id": 20,
     "pdu_size": 256,
     "name": "ais_stream",
@@ -117,6 +123,18 @@
     "channel_id": 51,
     "pdu_size": 256,
     "name": "foc_command",
+    "type": "std_msgs/String"
+  },
+  {
+    "channel_id": 52,
+    "pdu_size": 2048,
+    "name": "comm_status",
+    "type": "std_msgs/Float64MultiArray"
+  },
+  {
+    "channel_id": 53,
+    "pdu_size": 256,
+    "name": "autonomy_status_shore",
     "type": "std_msgs/String"
   }
 ]
